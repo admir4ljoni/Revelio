@@ -31,7 +31,7 @@ export class Today {
         this.page.add_child(left);
         this.page.add_child(this._grid);
         this.page.connectObject('notify::mapped', () => this._render(), this);
-        island.addPage(this.page);
+        island.addPage(this.page, 'Today', 'x-office-calendar-symbolic');
     }
 
     _render() {

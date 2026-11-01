@@ -1,4 +1,4 @@
-// The island: collapsed/expanded states, animation, positioning, pages switched with arrow buttons.
+// The island: collapsed/expanded states, animation, positioning, pages switched with a tab bar.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
@@ -8,7 +8,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const ANIM_MS = 250;
 const SLIDE_PX = 40; // page switch slides the new page in this far
-const EXPANDED_HEIGHT = 140;
+const EXPANDED_HEIGHT = 236;
+// Tabs sit in this order whenever they come and go (Music appears with a player).
+const TAB_ORDER = ['Music', 'Lyrics', 'Focus', 'Tasks', 'Today', 'Shelf', 'Clipboard', 'Script', 'Record', 'System', 'Power'];
 const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [230, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;
@@ -16,7 +18,7 @@ const COMPACT_CENTER = {clock: 120, minimal: 50, hidden: 50, 'status-bar': 120};
 const COMPACT_HEIGHT = 32;
 
 export class Island {
-    constructor(settings) {
+    constructor(settings, openPrefs) {
         this._settings = settings;
         this._expanded = false;
         this._paused = false;
@@ -56,39 +58,32 @@ export class Island {
         this._bar.add_child(this._leftWing);
         this._bar.add_child(this._center);
         this._bar.add_child(this._rightWing);
-        // Open island: [‹][current page, one dot per page at the bottom][›]. Arrows switch pages
-        // (no scrolling, so lists inside pages scroll freely).
+        // Open island: tab bar on top (icons; the current tab also shows its name, date, time and
+        // settings on the right), current page below.
+        this._tabBar = new St.BoxLayout({style_class: 'revelio-tabs'});
+        const prefs = new St.Button({style_class: 'revelio-tab', can_focus: true, child: new St.Icon({icon_name: 'emblem-system-symbolic'})});
+        prefs.connect('clicked', () => {
+            this._setExpanded(false);
+            openPrefs();
+        });
+        this._headDate = new St.Label({style_class: 'revelio-head-date', y_align: Clutter.ActorAlign.CENTER});
+        this._headTime = new St.Label({style_class: 'revelio-head-time', y_align: Clutter.ActorAlign.CENTER});
+        const header = new St.BoxLayout({style_class: 'revelio-header', x_expand: true});
+        header.add_child(this._tabBar);
+        header.add_child(new St.Widget({x_expand: true}));
+        header.add_child(prefs);
+        header.add_child(this._headDate);
+        header.add_child(this._headTime);
         this._pageBin = new St.Bin({x_expand: true, y_expand: true});
-        this._dots = new St.BoxLayout({style_class: 'revelio-dots', x_expand: true, y_expand: true,
-            x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.END});
-        const center = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, clip_to_allocation: true});
-        center.add_child(this._pageBin);
-        center.add_child(this._dots);
-        // Full-height strips, so the space above and below the arrow clicks too.
-        const arrow = (icon, step) => {
-            const b = new St.Button({style_class: 'revelio-arrow', can_focus: true, y_expand: true,
-                child: new St.Icon({icon_name: icon, y_align: Clutter.ActorAlign.CENTER})});
-            b.connect('clicked', () => this._showPage((this._page + step + this._pages.length) % this._pages.length, step));
-            return b;
-        };
-        this._arrows = [arrow('go-previous-symbolic', -1), arrow('go-next-symbolic', 1)];
-        this._open = new St.BoxLayout({x_expand: true, y_expand: true, visible: false, opacity: 0});
-        this._open.add_child(this._arrows[0]);
-        this._open.add_child(center);
-        this._open.add_child(this._arrows[1]);
+        const body = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, clip_to_allocation: true});
+        body.add_child(this._pageBin);
+        this._open = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_expand: true, visible: false, opacity: 0});
+        this._open.add_child(header);
+        this._open.add_child(body);
         this.actor.add_child(this._bar);
         this.actor.add_child(this._open);
-
-        // Built-in first page until the feature pages arrive: big time and date.
-        this._timeLabel = new St.Label({style_class: 'revelio-page-time', x_align: Clutter.ActorAlign.CENTER});
-        this._dateLabel = new St.Label({style_class: 'revelio-page-date', x_align: Clutter.ActorAlign.CENTER});
-        const clockPage = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER});
-        clockPage.add_child(this._timeLabel);
-        clockPage.add_child(this._dateLabel);
-        this._pages = [clockPage];
-        this._page = 0;
-        this._pageBin.set_child(clockPage);
-        this._renderDots();
+        this._pages = []; // {page, name, button, label}
+        this._tab = null;
 
         Main.layoutManager.addChrome(this.actor, {affectsStruts: false});
 
@@ -122,21 +117,34 @@ export class Island {
         this._sync();
     }
 
-    // Pages are owned (and destroyed) by the features that add them.
-    addPage(page) {
-        this._pages.push(page);
-        this._renderDots();
+    // Pages are owned (and destroyed) by the features that add them. `name` must be in TAB_ORDER.
+    addPage(page, name, icon) {
+        const label = new St.Label({text: name, visible: false, y_align: Clutter.ActorAlign.CENTER});
+        const box = new St.BoxLayout({style_class: 'revelio-tab-box'});
+        box.add_child(new St.Icon({icon_name: icon}));
+        box.add_child(label);
+        const tab = {page, name, label, button: new St.Button({style_class: 'revelio-tab', can_focus: true, child: box})};
+        tab.button.connect('clicked', () => this._showPage(tab));
+        const rank = n => TAB_ORDER.indexOf(n);
+        const i = this._pages.findIndex(t => rank(t.name) > rank(name));
+        this._pages.splice(i < 0 ? this._pages.length : i, 0, tab);
+        this._tabBar.insert_child_at_index(tab.button, this._pages.indexOf(tab));
+        if (!this._tab)
+            this._showPage(tab);
     }
 
     removePage(page) {
-        const i = this._pages.indexOf(page);
-        if (i <= 0)
+        const i = this._pages.findIndex(t => t.page === page);
+        if (i < 0)
             return;
-        this._pages.splice(i, 1);
-        if (this._page >= i)
-            this._showPage(this._page === i ? 0 : this._page - 1);
-        else
-            this._renderDots();
+        const [tab] = this._pages.splice(i, 1);
+        tab.button.destroy();
+        if (this._tab === tab)
+            this._showPage(this._pages[Math.min(i, this._pages.length - 1)] ?? null);
+    }
+
+    _findTab(page) {
+        return page ? this._pages.find(t => t.page === page) ?? null : null;
     }
 
     // What the closed island shows for a feature: {left, right, beatLeft?, beatRight?, page, priority}.
@@ -153,9 +161,9 @@ export class Island {
     // Opens the island on `page` (a drag over the shelf).
     open(page) {
         this._setExpanded(true);
-        const i = this._pages.indexOf(page);
-        if (i >= 0)
-            this._showPage(i);
+        const tab = this._findTab(page);
+        if (tab)
+            this._showPage(tab);
     }
 
     // Typing into the island (an entry): Wayland keys go to the focused window unless the Shell
@@ -221,8 +229,8 @@ export class Island {
         const time = now.format(this._settings.get_boolean('clock-24h') ? '%H:%M' : '%-l:%M %p');
         const withDate = this._look() === 'status-bar' && !(this._popup ?? this._compact);
         this._clockLabel.text = withDate ? `${now.format('%a %-d %b')}  ${time}` : time;
-        this._timeLabel.text = time;
-        this._dateLabel.text = now.format('%A, %-d %B');
+        this._headTime.text = time;
+        this._headDate.text = now.format('%a %-d %b');
     }
 
     _monitor() {
@@ -316,9 +324,9 @@ export class Island {
             return;
         this._expanded = expanded;
         // Jump to the compact's page only when it changed since the last open; else keep the tab.
-        const i = this._pages.indexOf(this._compact?.page);
-        if (expanded && i > 0 && this._compact !== this._openedCompact)
-            this._showPage(i);
+        const tab = this._findTab(this._compact?.page);
+        if (expanded && tab && this._compact !== this._openedCompact)
+            this._showPage(tab);
         if (expanded)
             this._openedCompact = this._compact;
         if (expanded)
@@ -335,14 +343,22 @@ export class Island {
         this._relayout(true);
     }
 
-    // step (±1) slides the new page in from that side.
-    _showPage(i, step = 0) {
-        this._page = i;
-        this._pageBin.set_child(this._pages[i]);
-        this._renderDots();
+    // Slides the new page in from the side of its tab.
+    _showPage(tab) {
+        const prev = this._tab;
+        this._tab = tab;
+        this._pageBin.set_child(tab?.page ?? null);
+        for (const t of this._pages) {
+            t.label.visible = t === tab;
+            if (t === tab)
+                t.button.add_style_pseudo_class('checked');
+            else
+                t.button.remove_style_pseudo_class('checked');
+        }
         const bin = this._pageBin;
         bin.remove_all_transitions();
-        if (!step) {
+        const step = prev && tab ? Math.sign(this._pages.indexOf(tab) - this._pages.indexOf(prev)) : 0;
+        if (!step || this._pages.indexOf(prev) < 0) {
             bin.translation_x = 0;
             bin.opacity = 255;
             return;
@@ -350,17 +366,6 @@ export class Island {
         bin.translation_x = step * SLIDE_PX * St.ThemeContext.get_for_stage(global.stage).scale_factor;
         bin.opacity = 0;
         bin.ease(/** @type {any} */ ({translation_x: 0, opacity: 255, duration: ANIM_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD}));
-    }
-
-    _renderDots() {
-        this._dots.destroy_all_children();
-        this._pages.forEach((_p, i) => {
-            const dot = new St.Widget({style_class: 'revelio-dot'});
-            if (i === this._page)
-                dot.add_style_pseudo_class('active');
-            this._dots.add_child(dot);
-        });
-        this._arrows.forEach(a => (a.visible = this._pages.length > 1));
     }
 
     destroy() {
@@ -378,8 +383,7 @@ export class Island {
         this._status = [null, null];
         this._compacts.clear();
         this.showCompact(null, false);
-        if (this._page !== 0)
-            this._pageBin.set_child(this._pages[0]);
+        this._pageBin.set_child(null);
         this.actor.destroy(); // layoutManager untracks chrome on destroy
         this._pages = [];
     }

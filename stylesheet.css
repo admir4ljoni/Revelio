@@ -5,7 +5,7 @@
 }
 
 .revelio-island:expanded {
-    border-radius: 0 0 28px 28px;
+    border-radius: 0 0 30px 30px;
 }
 
 /* Status-bar idle look: volume and battery around the date and time */
@@ -14,16 +14,6 @@
 .revelio-clock {
     font-weight: bold;
     font-feature-settings: "tnum";
-}
-
-.revelio-page-time {
-    font-size: 32pt;
-    font-weight: 800;
-    font-feature-settings: "tnum";
-}
-
-.revelio-page-date {
-    color: #aaa;
 }
 
 /* Closed island: [song marquee][beat clock beat][media buttons] */
@@ -175,25 +165,28 @@
 .revelio-shelf-icon { icon-size: 32px; }
 .revelio-shelf-name { font-size: 8pt; }
 
-/* Page dots at the bottom of the open island */
-.revelio-dots { spacing: 6px; padding-bottom: 6px; }
-.revelio-dot {
-    width: 6px;
-    height: 6px;
+/* Open island header: tabs on the left, settings, date and time on the right */
+.revelio-header {
+    padding: 10px 14px 6px 14px;
+    spacing: 4px;
+}
+.revelio-tabs { spacing: 2px; }
+.revelio-tab {
+    padding: 6px 8px;
     border-radius: 99px;
-    background-color: rgba(255, 255, 255, 0.3);
+    color: #8c8c8c;
 }
-.revelio-dot:active { background-color: #fff; }
-
-/* Previous/next page arrows at the sides of the open island */
-.revelio-arrow {
-    padding: 0 6px;
-    margin: 8px 4px;
-    border-radius: 12px;
-    color: #aaa;
+.revelio-tab:hover { color: #fff; background-color: rgba(255, 255, 255, 0.08); }
+.revelio-tab:checked {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.14);
+    padding: 6px 12px 6px 10px;
+    font-weight: bold;
 }
-.revelio-arrow:hover { color: #fff; background-color: rgba(255, 255, 255, 0.15); }
-.revelio-arrow StIcon { icon-size: 16px; }
+.revelio-tab StIcon { icon-size: 16px; }
+.revelio-tab-box { spacing: 6px; }
+.revelio-head-date { color: #8c8c8c; font-size: 10pt; padding: 0 8px 0 6px; }
+.revelio-head-time { font-weight: bold; font-feature-settings: "tnum"; }
 
 /* System and Power pages */
 .revelio-system-page { padding: 8px 16px; spacing: 12px; }

@@ -31,7 +31,7 @@ export class Clipboard {
         this.page = new St.BoxLayout({style_class: 'revelio-tasks-page', x_expand: true});
         this.page.add_child(scroll);
         this.page.add_child(clear);
-        island.addPage(this.page);
+        island.addPage(this.page, 'Clipboard', 'edit-paste-symbolic');
         this._render();
 
         global.display.get_selection().connectObject('owner-changed', (_s, type, source) => {

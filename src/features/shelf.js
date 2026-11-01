@@ -29,7 +29,7 @@ export class Shelf {
             vscrollbar_policy: St.PolicyType.NEVER,
             child: this._row,
         });
-        island.addPage(this.page);
+        island.addPage(this.page, 'Shelf', 'folder-symbolic');
         this._render();
 
         global.backend.get_dnd().connectObject(

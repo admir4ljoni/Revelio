@@ -32,7 +32,7 @@ export class Tasks {
         this.page = new St.BoxLayout({style_class: 'revelio-tasks-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         this.page.add_child(this._entry);
         this.page.add_child(scroll);
-        island.addPage(this.page);
+        island.addPage(this.page, 'Tasks', 'checkbox-checked-symbolic');
         this._render();
     }
 

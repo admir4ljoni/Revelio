@@ -35,7 +35,7 @@
     </key>
     <key name="expanded-width" type="u">
       <range min="240" max="900"/>
-      <default>420</default>
+      <default>680</default>
       <summary>Width of the open island, in pixels</summary>
     </key>
     <key name="monitor" type="s">

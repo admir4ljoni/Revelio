@@ -100,10 +100,10 @@ export class System {
         this._powerPage = new St.BoxLayout({style_class: 'revelio-system-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         this._powerPage.add_child(top);
 
-        for (const page of [this._sysPage, this._powerPage]) {
+        for (const page of [this._sysPage, this._powerPage])
             page.connectObject('notify::mapped', () => this._syncTimer(), this);
-            island.addPage(page);
-        }
+        island.addPage(this._sysPage, 'System', 'power-profile-balanced-symbolic');
+        island.addPage(this._powerPage, 'Power', 'battery-full-charged-symbolic');
     }
 
     _syncTimer() {

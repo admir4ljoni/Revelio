@@ -49,7 +49,7 @@ export class Focus {
         const right = new St.Bin({child: this._compactTime, x_expand: true, x_align: Clutter.ActorAlign.CENTER});
         this._compact = {left, right, page: this.page, priority: 2};
 
-        island.addPage(this.page);
+        island.addPage(this.page, 'Focus', 'alarm-symbolic');
         const sync = () => this._sync();
         settings.connectObject('changed::focus-minutes', sync, 'changed::break-minutes', sync,
             'changed::long-break-minutes', sync, this);

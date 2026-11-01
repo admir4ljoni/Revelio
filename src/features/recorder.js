@@ -14,7 +14,7 @@ export class Recorder {
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
         button.connect('clicked', () => Screenshot.showScreenRecordingUI());
         this.page = new St.Bin({child: button, x_expand: true, y_expand: true});
-        island.addPage(this.page);
+        island.addPage(this.page, 'Record', 'media-record-symbolic');
     }
 
     destroy() {

@@ -133,7 +133,7 @@ export class Lyrics {
         this.line.visible = lines.length > 0;
         const show = lines.length > 0;
         if (show && !this._shown)
-            this._island.addPage(this.page);
+            this._island.addPage(this.page, 'Lyrics', 'audio-x-generic-symbolic');
         else if (!show && this._shown)
             this._island.removePage(this.page);
         this._shown = show;
