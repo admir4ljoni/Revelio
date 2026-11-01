@@ -101,13 +101,44 @@
 
 .revelio-dim { color: #888; }
 
+/* Shared: pill buttons, segmented chips, rows */
+.revelio-row { spacing: 8px; }
+.revelio-pill {
+    padding: 8px 16px;
+    border-radius: 99px;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-weight: bold;
+}
+.revelio-pill:hover { background-color: rgba(255, 255, 255, 0.16); }
+.revelio-pill:insensitive { color: #5c5c5c; background-color: rgba(255, 255, 255, 0.04); }
+.revelio-pill StIcon { icon-size: 14px; }
+.revelio-pill-box { spacing: 6px; }
+.revelio-pill-accent { background-color: rgba(255, 159, 67, 0.22); color: #ffb470; }
+.revelio-pill-accent:hover { background-color: rgba(255, 159, 67, 0.34); }
+.revelio-segmented {
+    padding: 3px;
+    spacing: 2px;
+    border-radius: 99px;
+    background-color: rgba(255, 255, 255, 0.07);
+}
+.revelio-segment { padding: 5px 12px; border-radius: 99px; color: #bbb; font-weight: bold; }
+.revelio-segment:hover { color: #fff; }
+.revelio-segment:checked { background-color: rgba(255, 255, 255, 0.14); color: #fff; }
+
 /* Focus page */
-.revelio-focus-phase { color: #aaa; font-size: 9pt; }
+.revelio-focus-page { padding: 6px 28px 16px 28px; spacing: 28px; }
+.revelio-focus-ring { width: 140px; height: 140px; }
+.revelio-focus-phase { color: #999; font-size: 9pt; }
 .revelio-focus-time {
-    font-size: 30pt;
+    font-size: 26pt;
     font-weight: 800;
     font-feature-settings: "tnum";
 }
+.revelio-focus-side { spacing: 14px; }
+.revelio-focus-dots { spacing: 5px; padding-left: 4px; }
+.revelio-focus-dot { width: 8px; height: 8px; border-radius: 99px; background-color: rgba(255, 255, 255, 0.15); }
+.revelio-focus-dot:checked { background-color: #ff9f43; }
 
 /* Tasks page */
 .revelio-tasks-page {

@@ -6,6 +6,8 @@ import St from 'gi://St';
 import * as P from '../lib/pomodoro.js';
 
 const NAMES = {focus: 'Focus', break: 'Break', 'long-break': 'Long break'};
+const SHORT = {focus: 'Focus', break: 'Short', 'long-break': 'Long'};
+const RING = {focus: [1, 0.62, 0.26], break: [0.18, 0.76, 0.49], 'long-break': [0.47, 0.68, 0.93]};
 
 const fmt = ms => {
     const s = Math.ceil(ms / 1000);
@@ -23,22 +25,66 @@ export class Focus {
             this._state = P.initial();
         }
 
-        const button = (icon, action) => {
-            const b = new St.Button({style_class: 'revelio-media-button', can_focus: true, child: new St.Icon({icon_name: icon})});
-            b.connect('clicked', () => this._set(action(this._state, this._durations(), Date.now())));
-            return b;
-        };
+        // Left: countdown inside a progress ring. Right: phase chips, buttons, today's sessions.
+        this._ring = new St.DrawingArea({style_class: 'revelio-focus-ring'});
+        this._ring.connect('repaint', area => this._paintRing(area));
         this._phase = new St.Label({style_class: 'revelio-focus-phase', x_align: Clutter.ActorAlign.CENTER});
         this._time = new St.Label({style_class: 'revelio-focus-time', x_align: Clutter.ActorAlign.CENTER});
-        this._start = button('media-playback-start-symbolic', (s, d, now) => (P.running(s) ? P.pause : P.start)(s, d, now));
-        const buttons = new St.BoxLayout({style_class: 'revelio-media-controls', x_align: Clutter.ActorAlign.CENTER});
-        buttons.add_child(button('view-refresh-symbolic', P.reset));
+        const inner = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
+        inner.add_child(this._time);
+        inner.add_child(this._phase);
+        const dial = new St.Widget({layout_manager: new Clutter.BinLayout(), y_align: Clutter.ActorAlign.CENTER});
+        dial.add_child(this._ring);
+        dial.add_child(inner);
+
+        this._chips = {};
+        const chips = new St.BoxLayout({style_class: 'revelio-segmented', x_align: Clutter.ActorAlign.START});
+        for (const phase of Object.keys(NAMES)) {
+            const minutes = new St.Label({style_class: 'revelio-dim', y_align: Clutter.ActorAlign.CENTER});
+            const box = new St.BoxLayout({style_class: 'revelio-pill-box'});
+            box.add_child(new St.Label({text: SHORT[phase], y_align: Clutter.ActorAlign.CENTER}));
+            box.add_child(minutes);
+            const chip = new St.Button({style_class: 'revelio-segment', can_focus: true, child: box});
+            chip.connect('clicked', () => this._set({...P.reset(this._state), phase}));
+            this._chips[phase] = {chip, minutes};
+            chips.add_child(chip);
+        }
+
+        const button = (icon, text, cls, action) => {
+            const box = new St.BoxLayout({style_class: 'revelio-pill-box'});
+            const label = new St.Label({text, y_align: Clutter.ActorAlign.CENTER});
+            const iconActor = new St.Icon({icon_name: icon});
+            box.add_child(iconActor);
+            box.add_child(label);
+            const b = new St.Button({style_class: `revelio-pill ${cls}`, can_focus: true, child: box});
+            b.connect('clicked', () => this._set(action(this._state, this._durations(), Date.now())));
+            return Object.assign(b, {_label: label, _icon: iconActor});
+        };
+        this._start = button('media-playback-start-symbolic', 'Start', 'revelio-pill-accent',
+            (s, d, now) => (P.running(s) ? P.pause : P.start)(s, d, now));
+        this._reset = button('view-refresh-symbolic', 'Reset', '', P.reset);
+        const buttons = new St.BoxLayout({style_class: 'revelio-row'});
         buttons.add_child(this._start);
-        buttons.add_child(button('media-skip-forward-symbolic', P.advance));
-        this.page = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
-        this.page.add_child(this._phase);
-        this.page.add_child(this._time);
-        this.page.add_child(buttons);
+        buttons.add_child(this._reset);
+        buttons.add_child(button('media-skip-forward-symbolic', 'Skip', '', P.advance));
+
+        const dots = new St.BoxLayout({style_class: 'revelio-focus-dots', y_align: Clutter.ActorAlign.CENTER});
+        this._dots = Array.from({length: P.LONG_EVERY}, () => new St.Widget({style_class: 'revelio-focus-dot'}));
+        this._dots.forEach(dot => dots.add_child(dot));
+        this._sessions = new St.Label({style_class: 'revelio-dim', y_align: Clutter.ActorAlign.CENTER});
+        const sessions = new St.BoxLayout({style_class: 'revelio-row'});
+        sessions.add_child(dots);
+        sessions.add_child(this._sessions);
+
+        const side = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-focus-side',
+            x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        side.add_child(chips);
+        side.add_child(buttons);
+        side.add_child(sessions);
+        this.page = new St.BoxLayout({style_class: 'revelio-focus-page', x_expand: true});
+        this.page.add_child(dial);
+        this.page.add_child(side);
 
         // Closed island while running: phase on the left, countdown on the right.
         this._compactPhase = new St.Label({style_class: 'revelio-popup-text', y_align: Clutter.ActorAlign.CENTER});
@@ -76,11 +122,25 @@ export class Focus {
             this._set(next);
             return;
         }
-        const s = this._state, run = P.running(s), left = fmt(P.remaining(s, this._durations(), now));
-        this._phase.text = `${NAMES[s.phase]} · ${s.done} done`;
+        const s = this._state, run = P.running(s), d = this._durations(), ms = P.remaining(s, d, now);
+        this._progress = 1 - ms / d[s.phase];
+        this._phase.text = NAMES[s.phase];
         this._compactPhase.text = NAMES[s.phase];
-        this._time.text = this._compactTime.text = left;
-        /** @type {St.Icon} */ (this._start.child).icon_name = run ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
+        this._time.text = this._compactTime.text = fmt(ms);
+        this._start._icon.icon_name = run ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
+        this._start._label.text = run ? 'Pause' : s.left ? 'Resume' : 'Start';
+        this._reset.reactive = run || s.left > 0;
+        for (const [phase, {chip, minutes}] of Object.entries(this._chips)) {
+            minutes.text = String(d[phase] / 60000);
+            if (phase === s.phase)
+                chip.add_style_pseudo_class('checked');
+            else
+                chip.remove_style_pseudo_class('checked');
+        }
+        const inCycle = s.done % P.LONG_EVERY;
+        this._dots.forEach((dot, i) => (i < inCycle ? dot.add_style_pseudo_class('checked') : dot.remove_style_pseudo_class('checked')));
+        this._sessions.text = s.done ? `${s.done} focus session${s.done === 1 ? '' : 's'} done` : 'No focus sessions yet';
+        this._ring.queue_repaint();
         this._island.showCompact(this._compact, run);
 
         // Once a second, only while running.
@@ -93,6 +153,23 @@ export class Focus {
             GLib.source_remove(this._tickId);
             this._tickId = 0;
         }
+    }
+
+    _paintRing(area) {
+        const cr = area.get_context();
+        const [w, h] = area.get_surface_size();
+        const lw = Math.round(w / 18), r = (Math.min(w, h) - lw) / 2;
+        cr.setLineWidth(lw);
+        cr.setSourceRGBA(1, 1, 1, 0.1);
+        cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI);
+        cr.stroke();
+        if (this._progress > 0) {
+            cr.setLineCap(1); // ROUND
+            cr.setSourceRGBA(...RING[this._state.phase], 1);
+            cr.arc(w / 2, h / 2, r, -Math.PI / 2, -Math.PI / 2 + this._progress * 2 * Math.PI);
+            cr.stroke();
+        }
+        cr.$dispose();
     }
 
     destroy() {
