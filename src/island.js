@@ -23,8 +23,10 @@ export class Island {
         this._unredirectOff = false;
         this._timeoutId = 0;
         this._scrollAcc = 0;
+        this._compacts = new Set();
         this._compact = null;
         this._popup = null;
+        this._grab = null;
         this._status = [null, null];
 
         this.actor = new St.Widget({
@@ -80,9 +82,17 @@ export class Island {
         this.actor.connectObject(
             'notify::hover', () => this._onHover(),
             'button-release-event', (_a, event) => {
-                if (this._rightWing.contains(global.stage.get_event_actor(event)))
-                    return Clutter.EVENT_PROPAGATE; // media buttons handle their own clicks
+                // Buttons, entries and lists handle their own clicks (media buttons, page widgets).
+                const target = global.stage.get_event_actor(event);
+                if (this._rightWing.contains(target) || (this._expanded && this._pageBin.contains(target)))
+                    return Clutter.EVENT_PROPAGATE;
                 this._setExpanded(!this._expanded);
+                return Clutter.EVENT_STOP;
+            },
+            'key-press-event', (_a, event) => {
+                if (event.get_key_symbol() !== Clutter.KEY_Escape)
+                    return Clutter.EVENT_PROPAGATE;
+                this._setExpanded(false);
                 return Clutter.EVENT_STOP;
             },
             'scroll-event', (_a, event) => this._onScroll(event),
@@ -105,11 +115,38 @@ export class Island {
             this._showPage(this._page === i ? 0 : this._page - 1);
     }
 
-    // What the closed island shows for a feature (music): {left, right, beatLeft, beatRight, page}
-    // or null. Actors stay owned by the feature. Opening the island then shows `page`.
-    setCompact(compact) {
-        this._compact = compact;
+    // What the closed island shows for a feature: {left, right, beatLeft?, beatRight?, page, priority}.
+    // The highest priority shown one wins. Actors stay owned by the feature. Opening shows `page`.
+    showCompact(compact, show) {
+        if (show)
+            this._compacts.add(compact);
+        else
+            this._compacts.delete(compact);
+        this._compact = [...this._compacts].sort((a, b) => b.priority - a.priority)[0] ?? null;
         this._applyCompact();
+    }
+
+    // Opens the island on `page` (a drag over the shelf).
+    open(page) {
+        this._setExpanded(true);
+        const i = this._pages.indexOf(page);
+        if (i >= 0)
+            this._showPage(i);
+    }
+
+    // Typing into the island (an entry): Wayland keys go to the focused window unless the Shell
+    // takes a modal grab. Held until the island closes (pointer leaves, click outside, Escape).
+    grabKeys(actor) {
+        this._grab ??= Main.pushModal(this.actor, {actionMode: Shell.ActionMode.POPUP});
+        actor.grab_key_focus();
+    }
+
+    _releaseKeys() {
+        if (!this._grab)
+            return;
+        Main.popModal(this._grab);
+        this._grab = null;
+        global.stage.set_key_focus(null);
     }
 
     // A short message (see popups.js), {left, right} or null. Covers the compact view while set.
@@ -268,6 +305,8 @@ export class Island {
 
     _setExpanded(expanded) {
         this._clearTimeout();
+        if (!expanded)
+            this._releaseKeys();
         if (expanded === this._expanded)
             return;
         this._expanded = expanded;
@@ -322,6 +361,7 @@ export class Island {
 
     destroy() {
         this._clearTimeout();
+        this._releaseKeys();
         this._clock.disconnectObject(this);
         this._clock = null;
         this._settings.disconnectObject(this);
@@ -332,7 +372,8 @@ export class Island {
         // Leave feature actors to their owners; only the built-in ones die with the actor.
         this._popup = null;
         this._status = [null, null];
-        this.setCompact(null);
+        this._compacts.clear();
+        this.showCompact(null, false);
         if (this._page !== 0)
             this._pageBin.set_child(this._pages[0]);
         this.actor.destroy(); // layoutManager untracks chrome on destroy

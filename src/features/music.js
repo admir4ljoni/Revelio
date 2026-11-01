@@ -126,7 +126,7 @@ export class Music {
         const right = new St.Bin({child: this._compactControls.box, x_expand: true, x_align: Clutter.ActorAlign.CENTER});
 
         this._beats = [this._beatHalf(), this._beatHalf()];
-        this._compact = {left, right, beatLeft: this._beats[0], beatRight: this._beats[1]};
+        this._compact = {left, right, beatLeft: this._beats[0], beatRight: this._beats[1], priority: 1};
     }
 
     _buildPage() {
@@ -204,14 +204,14 @@ export class Music {
             this._island.addPage(this.page);
         this._player = best;
         if (!best) {
-            this._island.setCompact(null);
+            this._island.showCompact(this._compact, false);
             this._island.removePage(this.page);
             this._lyrics.setTrack(null);
             this._syncTick(false);
             return;
         }
         if (changed)
-            this._island.setCompact(this._compact);
+            this._island.showCompact(this._compact, true);
         this._update();
     }
 
@@ -447,7 +447,7 @@ export class Music {
             e.proxy?.disconnectObject(this);
         this._players.clear();
         if (this._player) {
-            this._island.setCompact(null);
+            this._island.showCompact(this._compact, false);
             this._island.removePage(this.page);
         }
         this._player = null;
