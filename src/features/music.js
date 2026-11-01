@@ -1,0 +1,417 @@
+// Music (1, 2, 7): follows MPRIS players, shows a compact view on the closed island and a
+// music page with art, controls and a seek bar when open.
+import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Graphene from 'gi://Graphene';
+import Soup from 'gi://Soup';
+import St from 'gi://St';
+import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
+
+const PREFIX = 'org.mpris.MediaPlayer2.';
+const PATH = '/org/mpris/MediaPlayer2';
+const IFACE = 'org.mpris.MediaPlayer2.Player';
+// The Shell's bundled MPRIS XML lacks Position/SetPosition/Seeked, so carry our own.
+const PlayerProxy = Gio.DBusProxy.makeProxyWrapper(`<node><interface name="${IFACE}">
+  <method name="PlayPause"/><method name="Next"/><method name="Previous"/>
+  <method name="SetPosition"><arg type="o" direction="in"/><arg type="x" direction="in"/></method>
+  <signal name="Seeked"><arg type="x"/></signal>
+  <property name="PlaybackStatus" type="s" access="read"/>
+  <property name="Metadata" type="a{sv}" access="read"/>
+  <property name="CanGoNext" type="b" access="read"/>
+  <property name="CanGoPrevious" type="b" access="read"/>
+  <property name="CanSeek" type="b" access="read"/>
+</interface></node>`);
+
+const MARQUEE_PX_PER_S = 30;
+const BEAT_MS = [380, 290, 340, 430]; // one per bar; uneven so it doesn't look mechanical
+const ART_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'revelio@midra', 'art']);
+
+const fmt = us => {
+    const s = Math.max(0, Math.floor(us / 1e6));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+export class Music {
+    constructor(island) {
+        this._island = island;
+        this._players = new Map(); // bus name -> {proxy, stamp}
+        this._player = null;
+        this._cancellable = new Gio.Cancellable();
+        this._soup = new Soup.Session({user_agent: 'Revelio (GNOME Shell extension)'});
+        this._tickId = 0;
+        this._pos = 0; // µs at this._posAt
+        this._posAt = 0;
+        this._dragging = false;
+        this._artUrl = null;
+
+        this._buildCompact();
+        this._buildPage();
+
+        const bus = Gio.DBus.session;
+        this._nameSub = bus.signal_subscribe('org.freedesktop.DBus', 'org.freedesktop.DBus',
+            'NameOwnerChanged', '/org/freedesktop/DBus', 'org.mpris.MediaPlayer2',
+            Gio.DBusSignalFlags.MATCH_ARG0_NAMESPACE, (_c, _s, _p, _i, _n, params) => {
+                const [name, , owner] = /** @type {string[]} */ (params.deepUnpack());
+                if (!name.startsWith(PREFIX))
+                    return;
+                this._remove(name);
+                if (owner)
+                    this._add(name);
+            });
+        bus.call('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'ListNames',
+            null, null, Gio.DBusCallFlags.NONE, -1, this._cancellable, (_c, res) => {
+                try {
+                    const [names] = /** @type {[string[]]} */ (bus.call_finish(res).deepUnpack());
+                    names.filter(n => n.startsWith(PREFIX)).forEach(n => this._add(n));
+                } catch (e) {
+                    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        logError(e, 'Revelio: ListNames');
+                }
+            });
+    }
+
+    // --- UI ---
+
+    _controls() {
+        const box = new St.BoxLayout({style_class: 'revelio-media-controls', y_align: Clutter.ActorAlign.CENTER});
+        const button = (icon, action) => {
+            const b = new St.Button({style_class: 'revelio-media-button', can_focus: true});
+            b.child = new St.Icon({icon_name: icon});
+            b.connect('clicked', () => this._player?.proxy[`${action}Async`]().catch(logError));
+            box.add_child(b);
+            return b;
+        };
+        return {
+            box,
+            prev: button('media-skip-backward-symbolic', 'Previous'),
+            play: button('media-playback-start-symbolic', 'PlayPause'),
+            next: button('media-skip-forward-symbolic', 'Next'),
+        };
+    }
+
+    _beatHalf() {
+        const box = new St.BoxLayout({style_class: 'revelio-beat'});
+        for (let i = 0; i < 2; i++)
+            box.add_child(new St.Widget({style_class: 'revelio-beat-bar', pivot_point: new Graphene.Point({x: 0.5, y: 0.5})}));
+        box.connectObject('notify::mapped', () => this._syncAnimations(), this);
+        return box;
+    }
+
+    _buildCompact() {
+        // Marquee: two copies of the text side by side, slid left by one copy's width, looped.
+        this._marquee = new St.Widget({clip_to_allocation: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        this._marqueeBox = new St.BoxLayout({style_class: 'revelio-marquee'});
+        this._marqueeText = [new St.Label(), new St.Label({visible: false})];
+        this._marqueeText.forEach(l => this._marqueeBox.add_child(l));
+        this._marquee.add_child(this._marqueeBox);
+        this._marquee.connectObject('notify::mapped', () => this._syncAnimations(),
+            'notify::width', () => this._syncAnimations(), this);
+        const left = new St.Bin({style_class: 'revelio-wing-left', child: this._marquee, x_expand: true});
+
+        this._compactControls = this._controls();
+        const right = new St.Bin({style_class: 'revelio-wing-right', child: this._compactControls.box,
+            x_expand: true, x_align: Clutter.ActorAlign.END});
+
+        this._beats = [this._beatHalf(), this._beatHalf()];
+        this._compact = {left, right, beatLeft: this._beats[0], beatRight: this._beats[1]};
+    }
+
+    _buildPage() {
+        this._art = new St.Icon({style_class: 'revelio-art', fallback_icon_name: 'audio-x-generic-symbolic'});
+        this._title = new St.Label({style_class: 'revelio-track-title'});
+        this._artist = new St.Label({style_class: 'revelio-track-artist'});
+        this._pageControls = this._controls();
+        this._slider = new Slider.Slider(0);
+        this._slider.x_expand = true;
+        this._slider.connectObject(
+            'drag-begin', () => (this._dragging = true),
+            'notify::value', () => this._dragging && this._showTime(this._slider.value * this._length()),
+            'drag-end', () => this._seekTo(this._slider.value * this._length()),
+            this);
+        this._time = new St.Label({style_class: 'revelio-track-time', y_align: Clutter.ActorAlign.CENTER});
+
+        const seek = new St.BoxLayout();
+        seek.add_child(this._slider);
+        seek.add_child(this._time);
+        const info = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        info.add_child(this._title);
+        info.add_child(this._artist);
+        info.add_child(this._pageControls.box);
+        info.add_child(seek);
+        this.page = new St.BoxLayout({style_class: 'revelio-music-page', x_expand: true});
+        this.page.add_child(this._art);
+        this.page.add_child(info);
+        this.page.connectObject('notify::mapped', () => this._syncTick(true), this);
+        this._compact.page = this.page;
+    }
+
+    // --- players ---
+
+    _add(name) {
+        const entry = {proxy: null, stamp: 0};
+        this._players.set(name, entry);
+        PlayerProxy(Gio.DBus.session, name, PATH, (proxy, error) => {
+            if (this._players.get(name) !== entry)
+                return; // vanished or disabled meanwhile
+            if (error) {
+                this._players.delete(name);
+                return;
+            }
+            entry.proxy = proxy;
+            entry.stamp = GLib.get_monotonic_time();
+            proxy.connectObject(
+                'g-properties-changed', (_p, changed) => {
+                    if (changed.lookup_value('PlaybackStatus', null) && proxy.PlaybackStatus === 'Playing')
+                        entry.stamp = GLib.get_monotonic_time();
+                    this._choose();
+                },
+                'g-signal', (_p, _sender, signal, params) => {
+                    if (signal === 'Seeked' && entry === this._player)
+                        this._setPos(params.deepUnpack()[0]);
+                },
+                this);
+            this._choose();
+        }, this._cancellable, Gio.DBusProxyFlags.DO_NOT_AUTO_START);
+    }
+
+    _remove(name) {
+        this._players.get(name)?.proxy?.disconnectObject(this);
+        if (this._players.delete(name))
+            this._choose();
+    }
+
+    // The playing player wins, else the one that played most recently. Ignore players without a track.
+    _choose() {
+        const live = [...this._players.values()].filter(e => e.proxy && this._meta(e.proxy).title);
+        const rank = e => (e.proxy.PlaybackStatus === 'Playing' ? 1e15 : 0) + e.stamp;
+        const best = live.sort((a, b) => rank(b) - rank(a))[0] ?? null;
+        const changed = best !== this._player;
+        if (changed && !this._player)
+            this._island.addPage(this.page);
+        this._player = best;
+        if (!best) {
+            this._island.setCompact(null);
+            this._island.removePage(this.page);
+            this._syncTick(false);
+            return;
+        }
+        if (changed)
+            this._island.setCompact(this._compact);
+        this._update();
+    }
+
+    _meta(proxy) {
+        const m = proxy.Metadata ?? {};
+        const get = k => {
+            try {
+                return m[k]?.deepUnpack();
+            } catch {
+                return undefined;
+            }
+        };
+        const artists = get('xesam:artist');
+        return {
+            title: typeof get('xesam:title') === 'string' ? get('xesam:title') : '',
+            artist: Array.isArray(artists) ? artists.join(', ') : String(artists ?? ''),
+            artUrl: get('mpris:artUrl') ?? '',
+            length: Number(get('mpris:length') ?? 0),
+            trackId: String(get('mpris:trackid') ?? '/'),
+        };
+    }
+
+    _update() {
+        const proxy = this._player.proxy;
+        const m = this._meta(proxy);
+        const playing = proxy.PlaybackStatus === 'Playing';
+        const text = m.artist ? `${m.title} - ${m.artist}` : m.title;
+        const trackChanged = this._trackKey !== `${m.trackId}|${text}`;
+        this._trackKey = `${m.trackId}|${text}`;
+        this._playing = playing;
+
+        this._marqueeText.forEach(l => (l.text = text));
+        this._title.text = m.title;
+        this._artist.text = m.artist;
+        for (const c of [this._compactControls, this._pageControls]) {
+            /** @type {St.Icon} */ (c.play.child).icon_name = playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
+            c.prev.reactive = !!proxy.CanGoPrevious;
+            c.next.reactive = !!proxy.CanGoNext;
+        }
+        this._slider.reactive = !!proxy.CanSeek && m.length > 0;
+        this._setArt(m.artUrl);
+        this._syncAnimations();
+        this._syncTick(trackChanged);
+    }
+
+    // --- album art: file:// directly, http(s) downloaded once into ~/.cache ---
+
+    _setArt(url) {
+        if (url === this._artUrl)
+            return;
+        this._artUrl = url;
+        this._art.gicon = null;
+        if (url.startsWith('file://')) {
+            this._art.gicon = new Gio.FileIcon({file: Gio.File.new_for_uri(url)});
+            return;
+        }
+        if (!/^https?:\/\//.test(url))
+            return;
+        const file = Gio.File.new_for_path(GLib.build_filenamev(
+            [ART_DIR, GLib.compute_checksum_for_string(GLib.ChecksumType.SHA1, url, -1)]));
+        if (file.query_exists(null)) {
+            this._art.gicon = new Gio.FileIcon({file});
+            return;
+        }
+        let msg;
+        try {
+            msg = Soup.Message.new('GET', url);
+        } catch {
+            return;
+        }
+        this._soup.send_and_read_async(msg, GLib.PRIORITY_LOW, this._cancellable, (_s, res) => {
+            try {
+                const bytes = this._soup.send_and_read_finish(res);
+                if (msg.get_status() !== Soup.Status.OK)
+                    return;
+                GLib.mkdir_with_parents(ART_DIR, 0o755);
+                file.replace_contents(bytes.toArray(), null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+                if (this._artUrl === url)
+                    this._art.gicon = new Gio.FileIcon({file});
+            } catch (e) {
+                if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                    log(`Revelio: album art ${url}: ${e.message}`);
+            }
+        });
+    }
+
+    // --- animations: only while playing and on screen (unmapped = island open, hidden or screen off) ---
+
+    _syncAnimations() {
+        const playing = !!this._player && this._playing;
+
+        const box = this._marqueeBox;
+        box.remove_all_transitions();
+        box.translation_x = 0;
+        const [, textW] = this._marqueeText[0].get_preferred_width(-1);
+        const overflow = this._marquee.mapped && textW > this._marquee.width;
+        this._marqueeText[1].visible = overflow;
+        if (overflow && playing) {
+            const dist = textW + box.get_theme_node().get_length('spacing');
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            box.ease(/** @type {any} */ ({ // snake_case: Shell's ease() needs it to attach repeatCount
+                translation_x: -dist,
+                duration: dist / (MARQUEE_PX_PER_S * scale) * 1000,
+                mode: Clutter.AnimationMode.LINEAR,
+                repeatCount: -1,
+            }));
+        }
+
+        let i = 0;
+        for (const half of this._beats) {
+            for (const bar of half.get_children()) {
+                bar.remove_all_transitions();
+                bar.scale_y = 0.35;
+                if (playing && half.mapped) {
+                    bar.ease(/** @type {any} */ ({
+                        scale_y: 1,
+                        duration: BEAT_MS[i % BEAT_MS.length],
+                        mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+                        repeatCount: -1,
+                        autoReverse: true,
+                    }));
+                }
+                i++;
+            }
+        }
+    }
+
+    // --- seek bar: read Position once, interpolate on a 1 s timer only while the page is visible and playing ---
+
+    _length() {
+        return this._player ? this._meta(this._player.proxy).length : 0;
+    }
+
+    _now() {
+        return this._pos + (this._playing ? GLib.get_monotonic_time() - this._posAt : 0);
+    }
+
+    _setPos(us) {
+        this._pos = us;
+        this._posAt = GLib.get_monotonic_time();
+        this._renderPos();
+    }
+
+    _renderPos() {
+        const len = this._length();
+        const now = Math.min(this._now(), len || Infinity);
+        if (!this._dragging)
+            this._slider.value = len > 0 ? now / len : 0;
+        this._showTime(now);
+    }
+
+    _showTime(us) {
+        const len = this._length();
+        this._time.text = len > 0 ? `${fmt(us)} / ${fmt(len)}` : fmt(us);
+    }
+
+    _syncTick(reread) {
+        const visible = !!this._player && this.page.mapped;
+        if (visible && reread)
+            this._readPosition();
+        const want = visible && this._playing;
+        if (want && !this._tickId) {
+            this._tickId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+                this._renderPos();
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (!want && this._tickId) {
+            GLib.source_remove(this._tickId);
+            this._tickId = 0;
+        }
+        if (visible)
+            this._renderPos();
+    }
+
+    // Position never arrives via PropertiesChanged, so ask for it.
+    _readPosition() {
+        const proxy = this._player.proxy;
+        proxy.call('org.freedesktop.DBus.Properties.Get', new GLib.Variant('(ss)', [IFACE, 'Position']),
+            Gio.DBusCallFlags.NONE, -1, this._cancellable, (_p, res) => {
+                try {
+                    const [v] = proxy.call_finish(res).deepUnpack();
+                    if (proxy === this._player?.proxy)
+                        this._setPos(Number(v.unpack()));
+                } catch (e) {
+                    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        this._setPos(0); // player doesn't report Position
+                }
+            });
+    }
+
+    _seekTo(us) {
+        this._dragging = false;
+        if (!this._player)
+            return;
+        const {trackId} = this._meta(this._player.proxy);
+        this._player.proxy.SetPositionAsync(trackId, Math.round(us)).catch(logError);
+        this._setPos(us); // Seeked will correct it
+    }
+
+    destroy() {
+        this._cancellable.cancel();
+        this._soup.abort();
+        Gio.DBus.session.signal_unsubscribe(this._nameSub);
+        if (this._tickId)
+            GLib.source_remove(this._tickId);
+        for (const e of this._players.values())
+            e.proxy?.disconnectObject(this);
+        this._players.clear();
+        if (this._player) {
+            this._island.setCompact(null);
+            this._island.removePage(this.page);
+        }
+        this._player = null;
+        for (const a of [this._compact.left, this._compact.right, ...this._beats, this.page])
+            a.destroy();
+    }
+}

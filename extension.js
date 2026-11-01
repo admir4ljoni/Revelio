@@ -2,11 +2,13 @@ import Gio from 'gi://Gio';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Island} from './src/island.js';
+import {Music} from './src/features/music.js';
 
 export default class RevelioExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._island = new Island(this._settings);
+        this._music = new Music(this._island);
 
         // Lock is covered by having no `session-modes` (we get disabled). Screen off isn't:
         // watch Mutter's PowerSaveMode (0 = on) and pause the island.
@@ -35,6 +37,8 @@ export default class RevelioExtension extends Extension {
         this._cancellable.cancel();
         this._displayConfig?.disconnectObject(this);
         this._displayConfig = null;
+        this._music.destroy();
+        this._music = null;
         this._island.destroy();
         this._island = null;
         this._settings = null;

@@ -22,3 +22,41 @@
 .revelio-page-date {
     color: #aaa;
 }
+
+/* Closed island: [song marquee][beat clock beat][media buttons] */
+.revelio-center { spacing: 6px; }
+.revelio-beat { spacing: 2px; }
+.revelio-beat-bar {
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background-color: #fff;
+}
+.revelio-wing-left { padding-left: 14px; }
+.revelio-wing-right { padding-right: 8px; }
+.revelio-marquee { spacing: 40px; }
+
+.revelio-media-controls { spacing: 2px; }
+.revelio-media-button {
+    padding: 3px 5px;
+    border-radius: 99px;
+    color: #fff;
+}
+.revelio-media-button:hover { background-color: rgba(255, 255, 255, 0.15); }
+.revelio-media-button:insensitive { color: #666; }
+.revelio-media-button StIcon { icon-size: 14px; }
+
+/* Open island: music page */
+.revelio-music-page {
+    spacing: 16px;
+    padding: 14px 20px;
+}
+.revelio-art { icon-size: 96px; }
+.revelio-track-title { font-weight: bold; }
+.revelio-track-artist { color: #aaa; }
+.revelio-track-time {
+    color: #aaa;
+    font-size: 9pt;
+    font-feature-settings: "tnum";
+    padding-left: 8px;
+}
