@@ -24,6 +24,7 @@ export class Lyrics {
         this._index = -1;
         this._timerId = 0;
         this._shown = false;
+        this._accent = null;
 
         // Current line on the music page (4).
         this.line = new St.Label({style_class: 'revelio-lyric-line', visible: false});
@@ -78,12 +79,25 @@ export class Lyrics {
         });
     }
 
+    // CSS color for the current line (from the album art), or null for the stylesheet's.
+    setAccent(color) {
+        this._accent = color && `color: ${color};`;
+        this.line.style = this._accent;
+        if (this._labels[this._index])
+            this._labels[this._index].style = this._accent;
+    }
+
     _show(i) {
         if (i === this._index)
             return;
-        this._labels[this._index]?.remove_style_pseudo_class('active');
+        const old = this._labels[this._index];
+        old?.remove_style_pseudo_class('active');
+        if (old)
+            old.style = null;
         this._index = i;
         this._labels[i]?.add_style_pseudo_class('active');
+        if (this._labels[i])
+            this._labels[i].style = this._accent;
         this.line.text = this._lines[i]?.text || '♪';
         this._scroll(true);
     }

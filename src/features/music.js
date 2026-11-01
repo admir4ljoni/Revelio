@@ -1,6 +1,7 @@
 // Music (1, 2, 7): follows MPRIS players, shows a compact view on the closed island and a
 // music page with art, controls and a seek bar when open. Feeds the track to Lyrics (3, 4).
 import Clutter from 'gi://Clutter';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
@@ -8,6 +9,7 @@ import Soup from 'gi://Soup';
 import St from 'gi://St';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import {Lyrics} from './lyrics.js';
+import {accent} from '../lib/color.js';
 
 const PREFIX = 'org.mpris.MediaPlayer2.';
 const PATH = '/org/mpris/MediaPlayer2';
@@ -334,6 +336,33 @@ export class Music {
         const gicon = bytes ? new Gio.BytesIcon({bytes}) : null;
         this._art.gicon = gicon;
         this._compactArt.gicon = gicon;
+        this._shownArt = bytes;
+        if (!bytes) {
+            this._setAccent(null);
+            return;
+        }
+        // Tint from a tiny decode of the cover; once per cover, off the main loop's hot path.
+        GdkPixbuf.Pixbuf.new_from_stream_at_scale_async(Gio.MemoryInputStream.new_from_bytes(bytes),
+            24, 24, false, this._cancellable, (_s, res) => {
+                let rgb = null;
+                try {
+                    const pb = GdkPixbuf.Pixbuf.new_from_stream_finish(res);
+                    rgb = accent(pb.get_pixels(), pb.n_channels, pb.rowstride, pb.width, pb.height);
+                } catch (e) {
+                    if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        return;
+                }
+                if (this._shownArt === bytes)
+                    this._setAccent(rgb);
+            });
+    }
+
+    // Accent from the cover on the beat bars, seek bar and lyrics; null = default white.
+    _setAccent(rgb) {
+        const color = rgb ? `rgb(${rgb.join(',')})` : null;
+        this._bars.forEach(([bar]) => (bar.style = color && `background-color: ${color};`));
+        this._slider.style = color && `-barlevel-active-background-color: ${color};`;
+        this._lyrics.setAccent(color);
     }
 
     // --- animations: only while playing and on screen (unmapped = island open, hidden or screen off) ---
