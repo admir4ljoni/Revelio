@@ -246,9 +246,11 @@
 .revelio-popup-detail { font-size: 9pt; color: #ccc; }
 
 /* Clipboard page */
-.revelio-clip-item { border-radius: 6px; padding: 2px 6px; }
-.revelio-clip-item:hover { background-color: rgba(255, 255, 255, 0.15); }
-.revelio-clip-text { font-size: 9pt; }
+.revelio-clip-item { padding: 7px 10px; }
+.revelio-clip-text { font-size: 10pt; color: #eee; }
+.revelio-small { font-size: 8.5pt; }
+.revelio-hint { padding-top: 10px; }
+.revelio-section-title { color: #aaa; font-weight: bold; font-size: 10pt; padding-left: 4px; }
 
 /* Script reader page */
 .revelio-script-page { padding: 8px 12px 14px 16px; spacing: 8px; }
