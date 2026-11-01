@@ -44,6 +44,7 @@ export class Music {
         this._posAt = 0;
         this._dragging = false;
         this._artUrl = null;
+        this._bars = []; // [actor, ms]
 
         this._buildCompact();
         this._buildPage();
@@ -92,9 +93,14 @@ export class Music {
 
     _beatHalf() {
         const box = new St.BoxLayout({style_class: 'revelio-beat'});
-        for (let i = 0; i < 2; i++)
-            box.add_child(new St.Widget({style_class: 'revelio-beat-bar', pivot_point: new Graphene.Point({x: 0.5, y: 0.5})}));
-        box.connectObject('notify::mapped', () => this._syncAnimations(), this);
+        for (let i = 0; i < 2; i++) {
+            const bar = new St.Widget({style_class: 'revelio-beat-bar', pivot_point: new Graphene.Point({x: 0.5, y: 0.5})});
+            const ms = BEAT_MS[this._bars.length % BEAT_MS.length];
+            this._bars.push([bar, ms]);
+            // Clutter skips transitions on unmapped actors, so react to the bar's own mapping.
+            bar.connectObject('notify::mapped', () => this._syncBar(bar, ms), this);
+            box.add_child(bar);
+        }
         return box;
     }
 
@@ -105,13 +111,16 @@ export class Music {
         this._marqueeText = [new St.Label(), new St.Label({visible: false})];
         this._marqueeText.forEach(l => this._marqueeBox.add_child(l));
         this._marquee.add_child(this._marqueeBox);
-        this._marquee.connectObject('notify::mapped', () => this._syncAnimations(),
-            'notify::width', () => this._syncAnimations(), this);
-        const left = new St.Bin({style_class: 'revelio-wing-left', child: this._marquee, x_expand: true});
+        this._marqueeBox.connectObject('notify::mapped', () => this._syncMarquee(), this);
+        this._marquee.connectObject('notify::width', () => this._syncMarquee(), this);
+        this._compactArt = new St.Icon({style_class: 'revelio-art-small', fallback_icon_name: 'audio-x-generic-symbolic',
+            y_align: Clutter.ActorAlign.CENTER});
+        const left = new St.BoxLayout({style_class: 'revelio-wing-left', x_expand: true});
+        left.add_child(this._compactArt);
+        left.add_child(this._marquee);
 
         this._compactControls = this._controls();
-        const right = new St.Bin({style_class: 'revelio-wing-right', child: this._compactControls.box,
-            x_expand: true, x_align: Clutter.ActorAlign.END});
+        const right = new St.Bin({child: this._compactControls.box, x_expand: true, x_align: Clutter.ActorAlign.CENTER});
 
         this._beats = [this._beatHalf(), this._beatHalf()];
         this._compact = {left, right, beatLeft: this._beats[0], beatRight: this._beats[1]};
@@ -249,9 +258,9 @@ export class Music {
         if (url === this._artUrl)
             return;
         this._artUrl = url;
-        this._art.gicon = null;
+        this._showArt(null);
         if (url.startsWith('file://')) {
-            this._art.gicon = new Gio.FileIcon({file: Gio.File.new_for_uri(url)});
+            this._showArt(Gio.File.new_for_uri(url));
             return;
         }
         if (!/^https?:\/\//.test(url))
@@ -259,7 +268,7 @@ export class Music {
         const file = Gio.File.new_for_path(GLib.build_filenamev(
             [ART_DIR, GLib.compute_checksum_for_string(GLib.ChecksumType.SHA1, url, -1)]));
         if (file.query_exists(null)) {
-            this._art.gicon = new Gio.FileIcon({file});
+            this._showArt(file);
             return;
         }
         let msg;
@@ -276,7 +285,7 @@ export class Music {
                 GLib.mkdir_with_parents(ART_DIR, 0o755);
                 file.replace_contents(bytes.toArray(), null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
                 if (this._artUrl === url)
-                    this._art.gicon = new Gio.FileIcon({file});
+                    this._showArt(file);
             } catch (e) {
                 if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                     log(`Revelio: album art ${url}: ${e.message}`);
@@ -284,45 +293,57 @@ export class Music {
         });
     }
 
+    _showArt(file) {
+        const gicon = file ? new Gio.FileIcon({file}) : null;
+        this._art.gicon = gicon;
+        this._compactArt.gicon = gicon;
+    }
+
     // --- animations: only while playing and on screen (unmapped = island open, hidden or screen off) ---
 
     _syncAnimations() {
-        const playing = !!this._player && this._playing;
+        this._syncMarquee();
+        this._bars.forEach(([bar, ms]) => this._syncBar(bar, ms));
+    }
 
+    _syncMarquee() {
+        const playing = !!this._player && this._playing;
         const box = this._marqueeBox;
         box.remove_all_transitions();
         box.translation_x = 0;
+        if (!box.mapped)
+            return; // leave the layout alone, or it reflows to full width and remeasures stale on remap
+        // Right after a remap the actor isn't allocated yet and .width reports its preferred width;
+        // the wing is fixed-size, so use the last real width.
+        if (this._marquee.has_allocation())
+            this._marqueeW = this._marquee.width;
         const [, textW] = this._marqueeText[0].get_preferred_width(-1);
-        const overflow = this._marquee.mapped && textW > this._marquee.width;
+        const overflow = textW > (this._marqueeW ?? Infinity);
         this._marqueeText[1].visible = overflow;
-        if (overflow && playing) {
-            const dist = textW + box.get_theme_node().get_length('spacing');
-            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-            box.ease(/** @type {any} */ ({ // snake_case: Shell's ease() needs it to attach repeatCount
-                translation_x: -dist,
-                duration: dist / (MARQUEE_PX_PER_S * scale) * 1000,
-                mode: Clutter.AnimationMode.LINEAR,
-                repeatCount: -1,
-            }));
-        }
+        if (!overflow || !playing)
+            return;
+        const dist = textW + box.get_theme_node().get_length('spacing');
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        box.ease(/** @type {any} */ ({ // snake_case: Shell's ease() needs it to attach repeatCount
+            translation_x: -dist,
+            duration: dist / (MARQUEE_PX_PER_S * scale) * 1000,
+            mode: Clutter.AnimationMode.LINEAR,
+            repeatCount: -1,
+        }));
+    }
 
-        let i = 0;
-        for (const half of this._beats) {
-            for (const bar of half.get_children()) {
-                bar.remove_all_transitions();
-                bar.scale_y = 0.35;
-                if (playing && half.mapped) {
-                    bar.ease(/** @type {any} */ ({
-                        scale_y: 1,
-                        duration: BEAT_MS[i % BEAT_MS.length],
-                        mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
-                        repeatCount: -1,
-                        autoReverse: true,
-                    }));
-                }
-                i++;
-            }
-        }
+    _syncBar(bar, ms) {
+        bar.remove_all_transitions();
+        bar.scale_y = 0.35;
+        if (!this._player || !this._playing || !bar.mapped)
+            return;
+        bar.ease(/** @type {any} */ ({
+            scale_y: 1,
+            duration: ms,
+            mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+            repeatCount: -1,
+            autoReverse: true,
+        }));
     }
 
     // --- seek bar: read Position once, interpolate on a 1 s timer only while the page is visible and playing ---

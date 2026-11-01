@@ -32,8 +32,11 @@
     border-radius: 2px;
     background-color: #fff;
 }
-.revelio-wing-left { padding-left: 14px; }
-.revelio-wing-right { padding-right: 8px; }
+.revelio-wing-left {
+    padding-left: 12px;
+    spacing: 8px;
+}
+.revelio-art-small { icon-size: 20px; }
 .revelio-marquee { spacing: 40px; }
 
 .revelio-media-controls { spacing: 2px; }
