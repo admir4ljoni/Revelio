@@ -1,0 +1,24 @@
+.revelio-island {
+    background-color: #000;
+    color: #fff;
+    border-radius: 0 0 14px 14px;
+}
+
+.revelio-island:expanded {
+    border-radius: 0 0 28px 28px;
+}
+
+.revelio-clock {
+    font-weight: bold;
+    font-feature-settings: "tnum";
+}
+
+.revelio-page-time {
+    font-size: 32pt;
+    font-weight: 800;
+    font-feature-settings: "tnum";
+}
+
+.revelio-page-date {
+    color: #aaa;
+}

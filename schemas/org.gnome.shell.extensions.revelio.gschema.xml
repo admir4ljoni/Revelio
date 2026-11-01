@@ -1,5 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
+  <enum id="org.gnome.shell.extensions.revelio.IdleLook">
+    <value nick="clock" value="0"/>
+    <value nick="minimal" value="1"/>
+    <value nick="hidden" value="2"/>
+  </enum>
+  <enum id="org.gnome.shell.extensions.revelio.Fullscreen">
+    <value nick="hide" value="0"/>
+    <value nick="stay-on-top" value="1"/>
+  </enum>
   <schema id="org.gnome.shell.extensions.revelio" path="/org/gnome/shell/extensions/revelio/">
+    <key name="clock-24h" type="b">
+      <default>true</default>
+      <summary>Use a 24-hour clock</summary>
+    </key>
+    <key name="idle-look" enum="org.gnome.shell.extensions.revelio.IdleLook">
+      <default>'clock'</default>
+      <summary>What the closed island shows when nothing is playing</summary>
+    </key>
+    <key name="expand-on-hover" type="b">
+      <default>true</default>
+      <summary>Expand when the pointer rests on the island (click always toggles)</summary>
+    </key>
+    <key name="open-delay" type="u">
+      <range min="0" max="2000"/>
+      <default>150</default>
+      <summary>Hover delay before opening, in milliseconds</summary>
+    </key>
+    <key name="close-delay" type="u">
+      <range min="0" max="5000"/>
+      <default>400</default>
+      <summary>Delay after the pointer leaves before closing, in milliseconds</summary>
+    </key>
+    <key name="expanded-width" type="u">
+      <range min="240" max="900"/>
+      <default>420</default>
+      <summary>Width of the open island, in pixels</summary>
+    </key>
+    <key name="monitor" type="s">
+      <default>''</default>
+      <summary>Connector of the monitor to show on (empty = primary)</summary>
+    </key>
+    <key name="fullscreen" enum="org.gnome.shell.extensions.revelio.Fullscreen">
+      <default>'hide'</default>
+      <summary>Behaviour over full-screen apps</summary>
+    </key>
   </schema>
 </schemalist>
