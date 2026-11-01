@@ -8,6 +8,10 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 const ANIM_MS = 250;
 const EXPANDED_HEIGHT = 140;
 const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12]};
+// Closed island with a feature's compact view: two equal wings keep the clock centered.
+const WING = 150;
+const COMPACT_CENTER = {clock: 120, minimal: 50, hidden: 50};
+const COMPACT_HEIGHT = 32;
 
 export class Island {
     constructor(settings) {
@@ -17,6 +21,7 @@ export class Island {
         this._unredirectOff = false;
         this._timeoutId = 0;
         this._scrollAcc = 0;
+        this._compact = null;
 
         this.actor = new St.Widget({
             style_class: 'revelio-island',
@@ -25,13 +30,29 @@ export class Island {
             clip_to_allocation: true,
             layout_manager: new Clutter.BinLayout(),
         });
-        this._clockLabel = new St.Label({
-            style_class: 'revelio-clock',
+        // Closed bar: [left wing][beat ⅃ clock L beat][right wing]. Only the center opens on hover,
+        // so the wings (song text, media buttons) stay usable.
+        this._clockLabel = new St.Label({style_class: 'revelio-clock', y_align: Clutter.ActorAlign.CENTER});
+        this._beatLeft = new St.Bin({y_align: Clutter.ActorAlign.CENTER});
+        this._beatRight = new St.Bin({y_align: Clutter.ActorAlign.CENTER});
+        this._center = new St.BoxLayout({
+            style_class: 'revelio-center',
+            reactive: true,
+            track_hover: true,
+            x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER,
         });
+        this._center.add_child(this._beatLeft);
+        this._center.add_child(this._clockLabel);
+        this._center.add_child(this._beatRight);
+        this._leftWing = new St.Bin({x_expand: false, y_expand: true, visible: false});
+        this._rightWing = new St.Bin({x_expand: false, y_expand: true, visible: false});
+        this._bar = new St.BoxLayout({x_expand: true, y_expand: true});
+        this._bar.add_child(this._leftWing);
+        this._bar.add_child(this._center);
+        this._bar.add_child(this._rightWing);
         this._pageBin = new St.Bin({x_expand: true, y_expand: true, visible: false, opacity: 0});
-        this.actor.add_child(this._clockLabel);
+        this.actor.add_child(this._bar);
         this.actor.add_child(this._pageBin);
 
         // Built-in first page until the feature pages arrive: big time and date.
@@ -51,9 +72,12 @@ export class Island {
         this._settings.connectObject('changed', () => this._sync(), this);
         Main.layoutManager.connectObject('monitors-changed', () => this._sync(), this);
         global.display.connectObject('in-fullscreen-changed', () => this._syncVisibility(), this);
+        this._center.connectObject('notify::hover', () => this._onHover(), this);
         this.actor.connectObject(
             'notify::hover', () => this._onHover(),
-            'button-release-event', () => {
+            'button-release-event', (_a, event) => {
+                if (this._rightWing.contains(global.stage.get_event_actor(event)))
+                    return Clutter.EVENT_PROPAGATE; // media buttons handle their own clicks
                 this._setExpanded(!this._expanded);
                 return Clutter.EVENT_STOP;
             },
@@ -75,6 +99,17 @@ export class Island {
         this._pages.splice(i, 1);
         if (this._page >= i)
             this._showPage(this._page === i ? 0 : this._page - 1);
+    }
+
+    // What the closed island shows for a feature (music): {left, right, beatLeft, beatRight, page}
+    // or null. Actors stay owned by the feature. Opening the island then shows `page`.
+    setCompact(compact) {
+        this._compact = compact;
+        this._leftWing.set_child(compact?.left ?? null);
+        this._rightWing.set_child(compact?.right ?? null);
+        this._beatLeft.set_child(compact?.beatLeft ?? null);
+        this._beatRight.set_child(compact?.beatRight ?? null);
+        this._relayout(true);
     }
 
     // Screen off: hide and stop updating.
@@ -114,14 +149,22 @@ export class Island {
             return;
         const look = this._settings.get_string('idle-look');
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const [w, h] = this._expanded
-            ? [this._settings.get_uint('expanded-width'), EXPANDED_HEIGHT]
-            : COLLAPSED[look];
+        const compact = this._compact;
+        let [w, h] = COLLAPSED[look];
+        if (this._expanded)
+            [w, h] = [this._settings.get_uint('expanded-width'), EXPANDED_HEIGHT];
+        else if (compact)
+            [w, h] = [2 * WING + COMPACT_CENTER[look], COMPACT_HEIGHT];
         const width = w * scale, height = h * scale;
         const geometry = {x: monitor.x + Math.round((monitor.width - width) / 2), y: monitor.y, width, height};
-        const opacity = look === 'hidden' && !this._expanded && !this.actor.hover ? 0 : 255;
+        const opacity = look === 'hidden' && !compact && !this._expanded && !this.actor.hover ? 0 : 255;
 
-        this._clockLabel.visible = !this._expanded && look === 'clock';
+        this._bar.visible = !this._expanded;
+        this._clockLabel.visible = look === 'clock';
+        for (const wing of [this._leftWing, this._rightWing]) {
+            wing.visible = !!compact;
+            wing.width = WING * scale;
+        }
         this.actor.remove_all_transitions();
         if (animate) {
             this.actor.ease({...geometry, opacity, duration: ANIM_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
@@ -148,12 +191,16 @@ export class Island {
         }
     }
 
+    // Opens from the center only; closes when the pointer leaves the whole island.
     _onHover() {
         this._clearTimeout();
-        if (this.actor.hover && !this._expanded && this._settings.get_boolean('expand-on-hover'))
+        if (this._expanded) {
+            if (!this.actor.hover)
+                this._delay('close-delay', false);
+            return;
+        }
+        if (this._center.hover && this._settings.get_boolean('expand-on-hover'))
             this._delay('open-delay', true);
-        else if (!this.actor.hover && this._expanded)
-            this._delay('close-delay', false);
         else
             this._relayout(true); // hidden look: fade in/out
     }
@@ -177,6 +224,9 @@ export class Island {
         if (expanded === this._expanded)
             return;
         this._expanded = expanded;
+        const i = this._pages.indexOf(this._compact?.page);
+        if (expanded && i > 0)
+            this._showPage(i);
         if (expanded)
             this.actor.add_style_pseudo_class('expanded');
         else
@@ -232,7 +282,8 @@ export class Island {
         global.display.disconnectObject(this);
         if (this._unredirectOff)
             global.compositor.enable_unredirect();
-        // Leave feature pages to their owners; only the built-in page dies with the actor.
+        // Leave feature actors to their owners; only the built-in ones die with the actor.
+        this.setCompact(null);
         if (this._page !== 0)
             this._pageBin.set_child(this._pages[0]);
         this.actor.destroy(); // layoutManager untracks chrome on destroy
