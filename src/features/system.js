@@ -88,7 +88,7 @@ export class System {
         this._sysPage.add_child(this._stats);
         this._sysPage.add_child(right);
 
-        // Power page: total on the left, CPU / GPU / other on the right, a hint when CPU is estimated.
+        // Power page: total on the left, CPU / GPU / other on the right.
         this._total = label('revelio-power-total');
         const left = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
         left.add_child(this._total);
@@ -97,11 +97,8 @@ export class System {
         const top = new St.BoxLayout({x_expand: true, y_expand: true});
         top.add_child(left);
         top.add_child(this._parts);
-        this._hint = new St.Label({style_class: 'revelio-stat revelio-dim', visible: false,
-            text: 'CPU is estimated. Allow RAPL readings in Settings → System.'});
         this._powerPage = new St.BoxLayout({style_class: 'revelio-system-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         this._powerPage.add_child(top);
-        this._powerPage.add_child(this._hint);
 
         for (const page of [this._sysPage, this._powerPage]) {
             page.connectObject('notify::mapped', () => this._syncTimer(), this);
@@ -285,8 +282,6 @@ export class System {
             ...apu ? [] : [`GPU  ${gpu === null ? 'N/A' : watts(gpu)}`],
             `Other  ${est(totalMeasured)}${watts(other)}`,
         ]);
-        // RAPL is there but root-only (CVE-2020-8694): point at the udev rule in prefs.
-        this._hint.visible = !cpuMeasured && this._rapl.some(z => !z.psys) && energy.every(e => e === null);
     }
 
     _paintGraph(area) {

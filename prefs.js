@@ -3,9 +3,6 @@ import Gdk from 'gi://Gdk';
 import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-const RAPL_COMMAND = `echo 'ACTION=="add", SUBSYSTEM=="powercap", KERNEL=="intel-rapl:*", RUN+="/bin/chmod a+r /sys%p/energy_uj"' | ` +
-    'sudo tee /etc/udev/rules.d/60-revelio-rapl.rules && sudo udevadm trigger --subsystem-match=powercap --action=add';
-
 export default class RevelioPreferences extends ExtensionPreferences {
     async fillPreferencesWindow(window) {
         const settings = this.getSettings();
@@ -74,21 +71,11 @@ export default class RevelioPreferences extends ExtensionPreferences {
             switchRow('sounds', 'Sound when a session ends'),
         ]));
 
-        // RAPL has been root-only since CVE-2020-8694 (a power side channel); offer the udev rule.
-        const rapl = new Adw.ActionRow({
-            title: 'Measured CPU power (RAPL)',
-            subtitle: 'Recent kernels let only root read it. This command adds a udev rule that makes it readable ' +
-                'for every user, which reopens a known power side channel (CVE-2020-8694). Paste it in a terminal.',
-        });
-        const copy = new Gtk.Button({label: 'Copy command', valign: Gtk.Align.CENTER});
-        copy.connect('clicked', () => copy.get_clipboard().set_content(Gdk.ContentProvider.new_for_value(RAPL_COMMAND)));
-        rapl.add_suffix(copy);
         const system = new Adw.PreferencesPage({title: 'System', icon_name: 'utilities-system-monitor-symbolic'});
         system.add(group('Power estimate', [
             spinRow('power-tdp', 'CPU at full load (W)', 5, 500, 5),
             spinRow('power-base', 'Everything else (W)', 0, 500, 5),
         ]));
-        system.add(group('Power readings', [rapl]));
 
         window.add(general);
         window.add(island);
