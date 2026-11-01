@@ -100,6 +100,7 @@
 .revelio-island:drop { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6); }
 
 .revelio-dim { color: #888; }
+.revelio-accent { color: #78aeed; }
 
 /* Shared: pill buttons, segmented chips, rows */
 .revelio-row { spacing: 8px; }
@@ -142,24 +143,35 @@
 
 /* Tasks page */
 .revelio-tasks-page {
-    padding: 10px 16px;
-    spacing: 6px;
+    padding: 4px 22px 16px 22px;
+    spacing: 8px;
 }
 .revelio-entry {
-    border-radius: 8px;
-    padding: 4px 8px;
-    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 7px 12px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: #fff;
     caret-color: #fff;
     selected-color: #000;
     selection-background-color: #fff;
 }
-.revelio-task-toggle { spacing: 8px; padding: 2px 0; }
-.revelio-task-icon { icon-size: 14px; }
+.revelio-entry:focus { border-color: #78aeed; }
+.revelio-entry-icon { icon-size: 14px; color: #999; padding-right: 4px; }
+.revelio-list-row { border-radius: 10px; padding: 0 6px; }
+.revelio-list-row:hover { background-color: rgba(255, 255, 255, 0.06); }
+.revelio-row-action { padding: 4px; border-radius: 99px; color: transparent; }
+.revelio-list-row:hover .revelio-row-action { color: #999; }
+.revelio-row-action:hover { color: #fff; background-color: rgba(255, 255, 255, 0.12); }
+.revelio-row-action StIcon { icon-size: 12px; }
+.revelio-task-toggle { spacing: 10px; padding: 5px 0; }
+.revelio-task-icon { icon-size: 16px; color: #999; }
 .revelio-task-text:done {
-    color: #777;
+    color: #6c6c6c;
     text-decoration: line-through;
 }
+.revelio-empty { padding-top: 24px; }
+.revelio-pill-small { padding: 4px 12px; font-size: 9pt; }
 
 /* Today page */
 .revelio-today-page {
