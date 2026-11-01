@@ -8,6 +8,14 @@
     border-radius: 0 0 28px 28px;
 }
 
+/* Themes (one class on the island): classic is the base above */
+.revelio-glass { background-color: rgba(0, 0, 0, 0.45); }
+.revelio-pill { border-radius: 99px; }
+.revelio-pill:expanded { border-radius: 28px; }
+
+/* Status-bar idle look (Pill): volume and battery around the date and time */
+.revelio-status-icon { icon-size: 14px; }
+
 .revelio-clock {
     font-weight: bold;
     font-feature-settings: "tnum";

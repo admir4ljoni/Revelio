@@ -35,7 +35,11 @@ export default class RevelioPreferences extends ExtensionPreferences {
         const general = new Adw.PreferencesPage({title: 'General', icon_name: 'preferences-system-symbolic'});
         general.add(group('Clock', [
             switchRow('clock-24h', '24-hour clock'),
-            comboRow('idle-look', 'Idle look', [['clock', 'Clock'], ['minimal', 'Minimal'], ['hidden', 'Hidden until hover']]),
+            comboRow('idle-look', 'Idle look', [['clock', 'Clock'], ['minimal', 'Minimal'], ['hidden', 'Hidden until hover'],
+                ['status-bar', 'Status bar (Pill theme)']]),
+        ]));
+        general.add(group('Theme', [
+            comboRow('theme', 'Theme', [['classic', 'Classic'], ['glass', 'Glass'], ['pill', 'Pill']]),
         ]));
 
         const monitors = [['', 'Primary monitor']];

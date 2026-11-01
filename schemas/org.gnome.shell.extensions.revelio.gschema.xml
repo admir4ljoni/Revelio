@@ -4,6 +4,12 @@
     <value nick="clock" value="0"/>
     <value nick="minimal" value="1"/>
     <value nick="hidden" value="2"/>
+    <value nick="status-bar" value="3"/>
+  </enum>
+  <enum id="org.gnome.shell.extensions.revelio.Theme">
+    <value nick="classic" value="0"/>
+    <value nick="glass" value="1"/>
+    <value nick="pill" value="2"/>
   </enum>
   <enum id="org.gnome.shell.extensions.revelio.Fullscreen">
     <value nick="hide" value="0"/>
@@ -16,7 +22,11 @@
     </key>
     <key name="idle-look" enum="org.gnome.shell.extensions.revelio.IdleLook">
       <default>'clock'</default>
-      <summary>What the closed island shows when nothing is playing</summary>
+      <summary>What the closed island shows when nothing is playing (status bar needs the Pill theme)</summary>
+    </key>
+    <key name="theme" enum="org.gnome.shell.extensions.revelio.Theme">
+      <default>'classic'</default>
+      <summary>Island theme: classic (black), glass (blurred) or pill (floating capsule)</summary>
     </key>
     <key name="expand-on-hover" type="b">
       <default>true</default>

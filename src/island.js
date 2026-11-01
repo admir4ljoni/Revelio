@@ -2,15 +2,17 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const ANIM_MS = 250;
 const EXPANDED_HEIGHT = 140;
-const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12]};
+const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [230, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;
-const COMPACT_CENTER = {clock: 120, minimal: 50, hidden: 50};
+const COMPACT_CENTER = {clock: 120, minimal: 50, hidden: 50, 'status-bar': 120};
+const PILL_GAP = 6; // Pill floats below the top edge
 const COMPACT_HEIGHT = 32;
 
 export class Island {
@@ -23,6 +25,7 @@ export class Island {
         this._scrollAcc = 0;
         this._compact = null;
         this._popup = null;
+        this._status = [null, null];
 
         this.actor = new St.Widget({
             style_class: 'revelio-island',
@@ -115,13 +118,28 @@ export class Island {
         this._applyCompact();
     }
 
-    _applyCompact() {
+    // Icons around the clock for the status-bar idle look (volume, battery). Owned by the caller,
+    // who must clear them (setStatus(null, null)) before destroying them.
+    setStatus(left, right) {
+        this._status = [left, right];
+        this._applyCompact();
+    }
+
+    // Status bar is a Pill-only look; other themes show the clock instead.
+    _look() {
+        const look = this._settings.get_string('idle-look');
+        return look === 'status-bar' && this._settings.get_string('theme') !== 'pill' ? 'clock' : look;
+    }
+
+    _applyCompact(animate = true) {
         const compact = this._popup ?? this._compact;
+        const status = !compact && this._look() === 'status-bar' ? this._status : [null, null];
         this._leftWing.set_child(compact?.left ?? null);
         this._rightWing.set_child(compact?.right ?? null);
-        this._beatLeft.set_child(compact?.beatLeft ?? null);
-        this._beatRight.set_child(compact?.beatRight ?? null);
-        this._relayout(true);
+        this._beatLeft.set_child(compact?.beatLeft ?? status[0]);
+        this._beatRight.set_child(compact?.beatRight ?? status[1]);
+        this._updateClock();
+        this._relayout(animate);
     }
 
     // Screen off: hide and stop updating.
@@ -133,9 +151,24 @@ export class Island {
     }
 
     _sync() {
-        this._updateClock();
-        this._relayout(false);
+        this._syncTheme();
+        this._applyCompact(false);
         this._syncVisibility();
+    }
+
+    // A theme is a CSS class, plus a background blur for Glass.
+    _syncTheme() {
+        const theme = this._settings.get_string('theme');
+        this.actor.style_class = `revelio-island revelio-${theme}`;
+        const blur = this.actor.get_effect('revelio-blur');
+        if (theme === 'glass' && !blur) {
+            // ponytail: Shell.BlurEffect has no corner radius, so the blur is square under the
+            // rounded corners; add a rounded-corner mask effect if that shows.
+            this.actor.add_effect_with_name('revelio-blur',
+                new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, radius: 30, brightness: 0.9}));
+        } else if (theme !== 'glass' && blur) {
+            this.actor.remove_effect(blur);
+        }
     }
 
     _updateClock() {
@@ -143,7 +176,8 @@ export class Island {
             return;
         const now = GLib.DateTime.new_now_local();
         const time = now.format(this._settings.get_boolean('clock-24h') ? '%H:%M' : '%-l:%M %p');
-        this._clockLabel.text = time;
+        const withDate = this._look() === 'status-bar' && !(this._popup ?? this._compact);
+        this._clockLabel.text = withDate ? `${now.format('%a %-d %b')}  ${time}` : time;
         this._timeLabel.text = time;
         this._dateLabel.text = now.format('%A, %-d %B');
     }
@@ -159,7 +193,7 @@ export class Island {
         const monitor = this._monitor();
         if (!monitor)
             return;
-        const look = this._settings.get_string('idle-look');
+        const look = this._look();
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const compact = this._popup ?? this._compact;
         let [w, h] = COLLAPSED[look];
@@ -168,11 +202,12 @@ export class Island {
         else if (compact)
             [w, h] = [2 * WING + COMPACT_CENTER[look], COMPACT_HEIGHT];
         const width = w * scale, height = h * scale;
-        const geometry = {x: monitor.x + Math.round((monitor.width - width) / 2), y: monitor.y, width, height};
+        const gap = this._settings.get_string('theme') === 'pill' ? PILL_GAP * scale : 0;
+        const geometry = {x: monitor.x + Math.round((monitor.width - width) / 2), y: monitor.y + gap, width, height};
         const opacity = look === 'hidden' && !compact && !this._expanded && !this.actor.hover ? 0 : 255;
 
         this._bar.visible = !this._expanded;
-        this._clockLabel.visible = look === 'clock';
+        this._clockLabel.visible = look === 'clock' || look === 'status-bar';
         for (const wing of [this._leftWing, this._rightWing]) {
             wing.visible = !!compact;
             wing.width = WING * scale;
@@ -296,6 +331,7 @@ export class Island {
             global.compositor.enable_unredirect();
         // Leave feature actors to their owners; only the built-in ones die with the actor.
         this._popup = null;
+        this._status = [null, null];
         this.setCompact(null);
         if (this._page !== 0)
             this._pageBin.set_child(this._pages[0]);
