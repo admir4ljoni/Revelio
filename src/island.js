@@ -57,9 +57,15 @@ export class Island {
         this._bar.add_child(this._leftWing);
         this._bar.add_child(this._center);
         this._bar.add_child(this._rightWing);
-        this._pageBin = new St.Bin({x_expand: true, y_expand: true, visible: false, opacity: 0});
+        // Open island: the current page, with one dot per page at the bottom (click or scroll to switch).
+        this._pageBin = new St.Bin({x_expand: true, y_expand: true});
+        this._dots = new St.BoxLayout({style_class: 'revelio-dots', x_expand: true, y_expand: true,
+            x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.END});
+        this._open = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, visible: false, opacity: 0});
+        this._open.add_child(this._pageBin);
+        this._open.add_child(this._dots);
         this.actor.add_child(this._bar);
-        this.actor.add_child(this._pageBin);
+        this.actor.add_child(this._open);
 
         // Built-in first page until the feature pages arrive: big time and date.
         this._timeLabel = new St.Label({style_class: 'revelio-page-time', x_align: Clutter.ActorAlign.CENTER});
@@ -70,6 +76,7 @@ export class Island {
         this._pages = [clockPage];
         this._page = 0;
         this._pageBin.set_child(clockPage);
+        this._renderDots();
 
         Main.layoutManager.addChrome(this.actor, {affectsStruts: false});
 
@@ -84,7 +91,7 @@ export class Island {
             'button-release-event', (_a, event) => {
                 // Buttons, entries and lists handle their own clicks (media buttons, page widgets).
                 const target = global.stage.get_event_actor(event);
-                if (this._rightWing.contains(target) || (this._expanded && this._pageBin.contains(target)))
+                if (this._rightWing.contains(target) || (this._expanded && this._open.contains(target)))
                     return Clutter.EVENT_PROPAGATE;
                 this._setExpanded(!this._expanded);
                 return Clutter.EVENT_STOP;
@@ -104,6 +111,7 @@ export class Island {
     // Pages are owned (and destroyed) by the features that add them.
     addPage(page) {
         this._pages.push(page);
+        this._renderDots();
     }
 
     removePage(page) {
@@ -113,6 +121,8 @@ export class Island {
         this._pages.splice(i, 1);
         if (this._page >= i)
             this._showPage(this._page === i ? 0 : this._page - 1);
+        else
+            this._renderDots();
     }
 
     // What the closed island shows for a feature: {left, right, beatLeft?, beatRight?, page, priority}.
@@ -317,12 +327,12 @@ export class Island {
             this.actor.add_style_pseudo_class('expanded');
         else
             this.actor.remove_style_pseudo_class('expanded');
-        this._pageBin.remove_all_transitions();
-        this._pageBin.visible = true;
-        this._pageBin.ease({
+        this._open.remove_all_transitions();
+        this._open.visible = true;
+        this._open.ease({
             opacity: expanded ? 255 : 0,
             duration: ANIM_MS,
-            onComplete: () => (this._pageBin.visible = this._expanded),
+            onComplete: () => (this._open.visible = this._expanded),
         });
         this._relayout(true);
     }
@@ -357,6 +367,18 @@ export class Island {
     _showPage(i) {
         this._page = i;
         this._pageBin.set_child(this._pages[i]);
+        this._renderDots();
+    }
+
+    _renderDots() {
+        this._dots.destroy_all_children();
+        this._pages.forEach((_p, i) => {
+            const dot = new St.Button({style_class: 'revelio-dot', can_focus: true});
+            if (i === this._page)
+                dot.add_style_pseudo_class('active');
+            dot.connect('clicked', () => this._showPage(i));
+            this._dots.add_child(dot);
+        });
     }
 
     destroy() {
