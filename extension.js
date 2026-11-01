@@ -7,6 +7,10 @@ import {Popups} from './src/popups.js';
 import {VolumePopup} from './src/features/volume.js';
 import {BatteryPopup} from './src/features/battery.js';
 import {HeadphonesPopup} from './src/features/headphones.js';
+import {Focus} from './src/features/focus.js';
+import {Tasks} from './src/features/tasks.js';
+import {Today} from './src/features/today.js';
+import {Shelf} from './src/features/shelf.js';
 
 export default class RevelioExtension extends Extension {
     enable() {
@@ -17,6 +21,8 @@ export default class RevelioExtension extends Extension {
         const volume = new VolumePopup(this._popups), battery = new BatteryPopup(this._popups);
         this._popupFeatures = [volume, battery, new HeadphonesPopup(this._popups)];
         this._island.setStatus(volume.icon, battery.icon);
+        this._tabs = [new Focus(this._island, this._settings), new Tasks(this._island),
+            new Today(this._island, this._settings), new Shelf(this._island)];
 
         // Lock is covered by having no `session-modes` (we get disabled). Screen off isn't:
         // watch Mutter's PowerSaveMode (0 = on) and pause the island.
@@ -45,6 +51,8 @@ export default class RevelioExtension extends Extension {
         this._cancellable.cancel();
         this._displayConfig?.disconnectObject(this);
         this._displayConfig = null;
+        this._tabs.forEach(f => f.destroy());
+        this._tabs = null;
         this._island.setStatus(null, null);
         this._popupFeatures.forEach(f => f.destroy());
         this._popupFeatures = null;

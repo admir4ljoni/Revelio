@@ -55,5 +55,28 @@
       <default>'hide'</default>
       <summary>Behaviour over full-screen apps</summary>
     </key>
+    <key name="sounds" type="b">
+      <default>true</default>
+      <summary>Play a sound when a focus session or break ends</summary>
+    </key>
+    <key name="focus-minutes" type="u">
+      <range min="1" max="180"/>
+      <default>25</default>
+      <summary>Focus session length, in minutes</summary>
+    </key>
+    <key name="break-minutes" type="u">
+      <range min="1" max="60"/>
+      <default>5</default>
+      <summary>Short break length, in minutes</summary>
+    </key>
+    <key name="long-break-minutes" type="u">
+      <range min="1" max="120"/>
+      <default>15</default>
+      <summary>Long break (every fourth) length, in minutes</summary>
+    </key>
+    <key name="focus-state" type="s">
+      <default>''</default>
+      <summary>Internal: focus timer state as JSON, kept across lock and log-out</summary>
+    </key>
   </schema>
 </schemalist>

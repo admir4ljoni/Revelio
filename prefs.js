@@ -64,6 +64,13 @@ export default class RevelioPreferences extends ExtensionPreferences {
             comboRow('fullscreen', 'Over full-screen apps', [['hide', 'Hide'], ['stay-on-top', 'Stay on top']]),
         ]));
 
+        general.add(group('Focus timer', [
+            spinRow('focus-minutes', 'Focus (minutes)', 1, 180, 1),
+            spinRow('break-minutes', 'Short break (minutes)', 1, 60, 1),
+            spinRow('long-break-minutes', 'Long break (minutes)', 1, 120, 1),
+            switchRow('sounds', 'Sound when a session ends'),
+        ]));
+
         window.add(general);
         window.add(island);
     }
