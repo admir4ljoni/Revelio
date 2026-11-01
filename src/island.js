@@ -1,4 +1,4 @@
-// The pill: collapsed/expanded states, animation, positioning, pages switched with arrow buttons.
+// The island: collapsed/expanded states, animation, positioning, pages switched with arrow buttons.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
@@ -13,7 +13,6 @@ const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12], 'sta
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;
 const COMPACT_CENTER = {clock: 120, minimal: 50, hidden: 50, 'status-bar': 120};
-const PILL_GAP = 6; // Pill floats below the top edge
 const COMPACT_HEIGHT = 32;
 
 export class Island {
@@ -184,10 +183,8 @@ export class Island {
         this._applyCompact();
     }
 
-    // Status bar is a Pill-only look; other themes show the clock instead.
     _look() {
-        const look = this._settings.get_string('idle-look');
-        return look === 'status-bar' && this._settings.get_string('theme') !== 'pill' ? 'clock' : look;
+        return this._settings.get_string('idle-look');
     }
 
     _applyCompact(animate = true) {
@@ -210,24 +207,8 @@ export class Island {
     }
 
     _sync() {
-        this._syncTheme();
         this._applyCompact(false);
         this._syncVisibility();
-    }
-
-    // A theme is a CSS class, plus a background blur for Glass.
-    _syncTheme() {
-        const theme = this._settings.get_string('theme');
-        this.actor.style_class = `revelio-island revelio-${theme}`;
-        const blur = this.actor.get_effect('revelio-blur');
-        if (theme === 'glass' && !blur) {
-            // ponytail: Shell.BlurEffect has no corner radius, so the blur is square under the
-            // rounded corners; add a rounded-corner mask effect if that shows.
-            this.actor.add_effect_with_name('revelio-blur',
-                new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, radius: 30, brightness: 0.9}));
-        } else if (theme !== 'glass' && blur) {
-            this.actor.remove_effect(blur);
-        }
     }
 
     _updateClock() {
@@ -261,8 +242,7 @@ export class Island {
         else if (compact)
             [w, h] = [2 * WING + COMPACT_CENTER[look], COMPACT_HEIGHT];
         const width = w * scale, height = h * scale;
-        const gap = this._settings.get_string('theme') === 'pill' ? PILL_GAP * scale : 0;
-        const geometry = {x: monitor.x + Math.round((monitor.width - width) / 2), y: monitor.y + gap, width, height};
+        const geometry = {x: monitor.x + Math.round((monitor.width - width) / 2), y: monitor.y, width, height};
         const opacity = look === 'hidden' && !compact && !this._expanded && !this.actor.hover ? 0 : 255;
 
         this._bar.visible = !this._expanded;

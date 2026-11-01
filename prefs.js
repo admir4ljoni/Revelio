@@ -37,10 +37,7 @@ export default class RevelioPreferences extends ExtensionPreferences {
         general.add(group('Clock', [
             switchRow('clock-24h', '24-hour clock'),
             comboRow('idle-look', 'Idle look', [['clock', 'Clock'], ['minimal', 'Minimal'], ['hidden', 'Hidden until hover'],
-                ['status-bar', 'Status bar (Pill theme)']]),
-        ]));
-        general.add(group('Theme', [
-            comboRow('theme', 'Theme', [['classic', 'Classic'], ['glass', 'Glass'], ['pill', 'Pill']]),
+                ['status-bar', 'Status bar']]),
         ]));
 
         const monitors = [['', 'Primary monitor']];
