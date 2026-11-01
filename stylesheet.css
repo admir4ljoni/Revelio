@@ -188,5 +188,14 @@
     border-radius: 99px;
     background-color: rgba(255, 255, 255, 0.3);
 }
-.revelio-dot:hover { background-color: rgba(255, 255, 255, 0.6); }
 .revelio-dot:active { background-color: #fff; }
+
+/* Previous/next page arrows at the sides of the open island */
+.revelio-arrow {
+    padding: 6px 4px;
+    margin: 0 4px;
+    border-radius: 99px;
+    color: #aaa;
+}
+.revelio-arrow:hover { color: #fff; background-color: rgba(255, 255, 255, 0.15); }
+.revelio-arrow StIcon { icon-size: 16px; }

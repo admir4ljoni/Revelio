@@ -1,4 +1,4 @@
-// The pill: collapsed/expanded states, animation, positioning, pages, scroll-to-switch.
+// The pill: collapsed/expanded states, animation, positioning, pages switched with arrow buttons.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
@@ -22,7 +22,6 @@ export class Island {
         this._paused = false;
         this._unredirectOff = false;
         this._timeoutId = 0;
-        this._scrollAcc = 0;
         this._compacts = new Set();
         this._compact = null;
         this._popup = null;
@@ -57,13 +56,25 @@ export class Island {
         this._bar.add_child(this._leftWing);
         this._bar.add_child(this._center);
         this._bar.add_child(this._rightWing);
-        // Open island: the current page, with one dot per page at the bottom (click or scroll to switch).
+        // Open island: [‹][current page, one dot per page at the bottom][›]. Arrows switch pages
+        // (no scrolling, so lists inside pages scroll freely).
         this._pageBin = new St.Bin({x_expand: true, y_expand: true});
         this._dots = new St.BoxLayout({style_class: 'revelio-dots', x_expand: true, y_expand: true,
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.END});
-        this._open = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, visible: false, opacity: 0});
-        this._open.add_child(this._pageBin);
-        this._open.add_child(this._dots);
+        const center = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true});
+        center.add_child(this._pageBin);
+        center.add_child(this._dots);
+        const arrow = (icon, step) => {
+            const b = new St.Button({style_class: 'revelio-arrow', can_focus: true, y_align: Clutter.ActorAlign.CENTER,
+                child: new St.Icon({icon_name: icon})});
+            b.connect('clicked', () => this._showPage((this._page + step + this._pages.length) % this._pages.length));
+            return b;
+        };
+        this._arrows = [arrow('go-previous-symbolic', -1), arrow('go-next-symbolic', 1)];
+        this._open = new St.BoxLayout({x_expand: true, y_expand: true, visible: false, opacity: 0});
+        this._open.add_child(this._arrows[0]);
+        this._open.add_child(center);
+        this._open.add_child(this._arrows[1]);
         this.actor.add_child(this._bar);
         this.actor.add_child(this._open);
 
@@ -102,7 +113,6 @@ export class Island {
                 this._setExpanded(false);
                 return Clutter.EVENT_STOP;
             },
-            'scroll-event', (_a, event) => this._onScroll(event),
             this);
 
         this._sync();
@@ -337,33 +347,6 @@ export class Island {
         this._relayout(true);
     }
 
-    _onScroll(event) {
-        if (!this._expanded || this._pages.length < 2)
-            return Clutter.EVENT_PROPAGATE;
-        let step = 0;
-        switch (event.get_scroll_direction()) {
-        case Clutter.ScrollDirection.UP:
-        case Clutter.ScrollDirection.LEFT:
-            step = -1;
-            break;
-        case Clutter.ScrollDirection.DOWN:
-        case Clutter.ScrollDirection.RIGHT:
-            step = 1;
-            break;
-        case Clutter.ScrollDirection.SMOOTH: {
-            const [dx, dy] = event.get_scroll_delta();
-            this._scrollAcc += Math.abs(dy) > Math.abs(dx) ? dy : dx;
-            if (Math.abs(this._scrollAcc) >= 1) {
-                step = Math.sign(this._scrollAcc);
-                this._scrollAcc = 0;
-            }
-        }
-        }
-        if (step)
-            this._showPage((this._page + step + this._pages.length) % this._pages.length);
-        return Clutter.EVENT_STOP;
-    }
-
     _showPage(i) {
         this._page = i;
         this._pageBin.set_child(this._pages[i]);
@@ -373,12 +356,12 @@ export class Island {
     _renderDots() {
         this._dots.destroy_all_children();
         this._pages.forEach((_p, i) => {
-            const dot = new St.Button({style_class: 'revelio-dot', can_focus: true});
+            const dot = new St.Widget({style_class: 'revelio-dot'});
             if (i === this._page)
                 dot.add_style_pseudo_class('active');
-            dot.connect('clicked', () => this._showPage(i));
             this._dots.add_child(dot);
         });
+        this._arrows.forEach(a => (a.visible = this._pages.length > 1));
     }
 
     destroy() {
