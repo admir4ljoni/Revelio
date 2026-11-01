@@ -88,5 +88,46 @@
       <default>''</default>
       <summary>Internal: focus timer state as JSON, kept across lock and log-out</summary>
     </key>
+    <key name="addon-notifications" type="b">
+      <default>false</default>
+      <summary>Show other apps' notifications on the island</summary>
+    </key>
+    <key name="addon-clipboard" type="b">
+      <default>false</default>
+      <summary>Clipboard history tab (kept in memory only)</summary>
+    </key>
+    <key name="addon-script" type="b">
+      <default>false</default>
+      <summary>Script reader (teleprompter) tab</summary>
+    </key>
+    <key name="addon-recorder" type="b">
+      <default>false</default>
+      <summary>Screen recorder tab</summary>
+    </key>
+    <key name="notification-hide-sender" type="b">
+      <default>false</default>
+      <summary>Hide which app sent a notification</summary>
+    </key>
+    <key name="notification-hide-text" type="b">
+      <default>false</default>
+      <summary>Hide a notification's text</summary>
+    </key>
+    <key name="notification-apps" type="as">
+      <default>[]</default>
+      <summary>Internal: apps that have sent notifications, for the per-app switches in prefs</summary>
+    </key>
+    <key name="notification-muted-apps" type="as">
+      <default>[]</default>
+      <summary>Apps whose notifications aren't shown on the island</summary>
+    </key>
+    <key name="script-file" type="s">
+      <default>''</default>
+      <summary>Text file for the script reader</summary>
+    </key>
+    <key name="script-wpm" type="u">
+      <range min="60" max="300"/>
+      <default>150</default>
+      <summary>Script reader speed, in words per minute</summary>
+    </key>
   </schema>
 </schemalist>

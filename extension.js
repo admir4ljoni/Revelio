@@ -12,6 +12,18 @@ import {Tasks} from './src/features/tasks.js';
 import {Today} from './src/features/today.js';
 import {Shelf} from './src/features/shelf.js';
 import {System} from './src/features/system.js';
+import {Notifications} from './src/features/notifications.js';
+import {Clipboard} from './src/features/clipboard.js';
+import {Script} from './src/features/script.js';
+import {Recorder} from './src/features/recorder.js';
+
+// Add-ons are off by default and come and go with their switch.
+const ADDONS = {
+    'addon-notifications': ext => new Notifications(ext._popups, ext._settings),
+    'addon-clipboard': ext => new Clipboard(ext._island),
+    'addon-script': ext => new Script(ext._island, ext._settings),
+    'addon-recorder': ext => new Recorder(ext._island),
+};
 
 export default class RevelioExtension extends Extension {
     enable() {
@@ -25,6 +37,10 @@ export default class RevelioExtension extends Extension {
         this._tabs = [new Focus(this._island, this._settings), new Tasks(this._island),
             new Today(this._island, this._settings), new Shelf(this._island),
             new System(this._island, this._settings, battery)];
+        this._addons = {};
+        for (const key of Object.keys(ADDONS))
+            this._settings.connectObject(`changed::${key}`, () => this._syncAddon(key), this);
+        Object.keys(ADDONS).forEach(k => this._syncAddon(k));
 
         // Lock is covered by having no `session-modes` (we get disabled). Screen off isn't:
         // watch Mutter's PowerSaveMode (0 = on) and pause the island.
@@ -44,6 +60,16 @@ export default class RevelioExtension extends Extension {
             });
     }
 
+    _syncAddon(key) {
+        const on = this._settings.get_boolean(key);
+        if (on && !this._addons[key]) {
+            this._addons[key] = ADDONS[key](this);
+        } else if (!on && this._addons[key]) {
+            this._addons[key].destroy();
+            delete this._addons[key];
+        }
+    }
+
     _syncPowerSave() {
         const mode = Number(this._displayConfig.get_cached_property('PowerSaveMode')?.unpack() ?? 0);
         this._island.setPaused(mode > 0);
@@ -53,6 +79,9 @@ export default class RevelioExtension extends Extension {
         this._cancellable.cancel();
         this._displayConfig?.disconnectObject(this);
         this._displayConfig = null;
+        this._settings.disconnectObject(this);
+        Object.values(this._addons).forEach(f => f.destroy());
+        this._addons = null;
         this._tabs.forEach(f => f.destroy());
         this._tabs = null;
         this._island.setStatus(null, null);

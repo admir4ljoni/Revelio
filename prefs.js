@@ -1,5 +1,6 @@
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
+import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -77,8 +78,56 @@ export default class RevelioPreferences extends ExtensionPreferences {
             spinRow('power-base', 'Everything else (W)', 0, 500, 5),
         ]));
 
+        const addons = new Adw.PreferencesPage({title: 'Add-ons', icon_name: 'application-x-addon-symbolic'});
+        addons.add(group('Add-ons', [
+            switchRow('addon-notifications', 'Notifications on the island'),
+            switchRow('addon-clipboard', 'Clipboard history (in memory only)'),
+            switchRow('addon-script', 'Script reader'),
+            switchRow('addon-recorder', 'Screen recorder tab'),
+        ]));
+
+        // One switch per app that has sent a notification since the add-on was turned on.
+        const muted = () => settings.get_strv('notification-muted-apps');
+        const appRows = settings.get_strv('notification-apps').sort().map(app => {
+            const row = new Adw.SwitchRow({title: app, active: !muted().includes(app)});
+            row.connect('notify::active', () => settings.set_strv('notification-muted-apps',
+                row.active ? muted().filter(a => a !== app) : [...muted(), app]));
+            return row;
+        });
+        const notifications = group('Notifications', [
+            switchRow('notification-hide-sender', 'Hide the sender'),
+            switchRow('notification-hide-text', 'Hide the text'),
+        ]);
+        addons.add(notifications);
+        const apps = group('Apps', appRows);
+        apps.description = appRows.length ? 'Show notifications from these apps on the island'
+            : 'Apps appear here after they send a notification';
+        addons.add(apps);
+
+        const fileRow = new Adw.ActionRow({title: 'Script file'});
+        const syncFile = () => (fileRow.subtitle = settings.get_string('script-file') || 'None (paste text on the island instead)');
+        settings.connect('changed::script-file', syncFile);
+        syncFile();
+        const choose = new Gtk.Button({label: 'Choose…', valign: Gtk.Align.CENTER});
+        choose.connect('clicked', async () => {
+            const filter = new Gtk.FileFilter({name: 'Text files'});
+            filter.add_mime_type('text/plain');
+            const filters = new Gio.ListStore({item_type: Gtk.FileFilter.$gtype});
+            filters.append(filter);
+            try {
+                const file = await new Gtk.FileDialog({filters}).open(window, null);
+                settings.set_string('script-file', file.get_path() ?? '');
+            } catch {} // cancelled
+        });
+        const clear = new Gtk.Button({icon_name: 'edit-clear-symbolic', valign: Gtk.Align.CENTER, tooltip_text: 'Clear'});
+        clear.connect('clicked', () => settings.set_string('script-file', ''));
+        fileRow.add_suffix(choose);
+        fileRow.add_suffix(clear);
+        addons.add(group('Script reader', [fileRow, spinRow('script-wpm', 'Speed (words per minute)', 60, 300, 10)]));
+
         window.add(general);
         window.add(island);
         window.add(system);
+        window.add(addons);
     }
 }
