@@ -74,6 +74,16 @@
       <default>15</default>
       <summary>Long break (every fourth) length, in minutes</summary>
     </key>
+    <key name="power-tdp" type="u">
+      <range min="5" max="500"/>
+      <default>65</default>
+      <summary>CPU power at full load, in watts, for the estimate when RAPL can't be read</summary>
+    </key>
+    <key name="power-base" type="u">
+      <range min="0" max="500"/>
+      <default>40</default>
+      <summary>Estimated draw of everything but CPU and GPU, in watts, when there's no total reading</summary>
+    </key>
     <key name="focus-state" type="s">
       <default>''</default>
       <summary>Internal: focus timer state as JSON, kept across lock and log-out</summary>

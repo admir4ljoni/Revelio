@@ -1,5 +1,5 @@
 // Battery (10): pop-up on plug/unplug, low battery and full charge, from UPower's DisplayDevice.
-// `proxy` is public so the System page (Phase 7) can reuse it; `icon` is for the status-bar idle look.
+// `proxy` is public so the System and Power pages reuse it; `icon` is for the status-bar idle look.
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
@@ -9,6 +9,7 @@ const DeviceProxy = Gio.DBusProxy.makeProxyWrapper(`<node><interface name="org.f
   <property name="IsPresent" type="b" access="read"/>
   <property name="IconName" type="s" access="read"/>
   <property name="WarningLevel" type="u" access="read"/>
+  <property name="EnergyRate" type="d" access="read"/>
 </interface></node>`);
 
 const CHARGING = 1, FULL = 4, PENDING_CHARGE = 5; // UPower State

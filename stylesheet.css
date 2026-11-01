@@ -199,3 +199,14 @@
 }
 .revelio-arrow:hover { color: #fff; background-color: rgba(255, 255, 255, 0.15); }
 .revelio-arrow StIcon { icon-size: 16px; }
+
+/* System and Power pages */
+.revelio-system-page { padding: 8px 16px; spacing: 12px; }
+.revelio-system-right { spacing: 2px; width: 130px; }
+.revelio-stat { font-size: 8.5pt; font-feature-settings: "tnum"; }
+.revelio-graph { width: 130px; height: 44px; }
+.revelio-power-total {
+    font-size: 26pt;
+    font-weight: 800;
+    font-feature-settings: "tnum";
+}
