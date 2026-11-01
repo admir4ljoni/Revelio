@@ -3,12 +3,18 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Island} from './src/island.js';
 import {Music} from './src/features/music.js';
+import {Popups} from './src/popups.js';
+import {VolumePopup} from './src/features/volume.js';
+import {BatteryPopup} from './src/features/battery.js';
+import {HeadphonesPopup} from './src/features/headphones.js';
 
 export default class RevelioExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._island = new Island(this._settings);
         this._music = new Music(this._island);
+        this._popups = new Popups(this._island);
+        this._popupFeatures = [VolumePopup, BatteryPopup, HeadphonesPopup].map(F => new F(this._popups));
 
         // Lock is covered by having no `session-modes` (we get disabled). Screen off isn't:
         // watch Mutter's PowerSaveMode (0 = on) and pause the island.
@@ -37,6 +43,10 @@ export default class RevelioExtension extends Extension {
         this._cancellable.cancel();
         this._displayConfig?.disconnectObject(this);
         this._displayConfig = null;
+        this._popupFeatures.forEach(f => f.destroy());
+        this._popupFeatures = null;
+        this._popups.destroy();
+        this._popups = null;
         this._music.destroy();
         this._music = null;
         this._island.destroy();
