@@ -1,0 +1,15 @@
+{
+  "name": "revelio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p jsconfig.json",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@girs/gjs": "*",
+    "@girs/gnome-shell": "~50.0.4",
+    "eslint": "^10.14.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "uuid": "revelio@midra",
+  "name": "Revelio",
+  "description": "A lightweight Dynamic Island for GNOME Shell: media, lyrics, pop-ups, focus timer, tasks and system stats in a notch at the top of the screen.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.revelio",
+  "url": ""
+}

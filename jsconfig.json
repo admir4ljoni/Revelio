@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "checkJs": true,
+    "noEmit": true,
+    "lib": ["ES2022"],
+    "types": ["@girs/gjs", "@girs/gnome-shell/ambient"]
+  },
+  "include": ["*.js", "src/**/*.js", "tests/**/*.js"],
+  "exclude": ["node_modules"]
+}
