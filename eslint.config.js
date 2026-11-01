@@ -5,7 +5,7 @@ export default [
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'module',
-            globals: {global: 'readonly', log: 'readonly', logError: 'readonly', console: 'readonly', print: 'readonly', imports: 'readonly'},
+            globals: {global: 'readonly', log: 'readonly', logError: 'readonly', console: 'readonly', print: 'readonly', imports: 'readonly', TextDecoder: 'readonly', TextEncoder: 'readonly'},
         },
         rules: {'no-unused-vars': 'warn', 'no-undef': 'error'},
     },

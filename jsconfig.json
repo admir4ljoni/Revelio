@@ -7,7 +7,7 @@
     "strict": false,
     "noEmit": true,
     "lib": ["ES2022"],
-    "types": ["@girs/gjs", "@girs/gnome-shell/ambient", "@girs/gnome-shell/extensions/global", "@girs/gtk-4.0/ambient", "@girs/soup-3.0/ambient"]
+    "types": ["@girs/gjs", "@girs/gjs/dom", "@girs/gnome-shell/ambient", "@girs/gnome-shell/extensions/global", "@girs/gtk-4.0/ambient", "@girs/soup-3.0/ambient"]
   },
   "include": ["*.js", "src/**/*.js", "tests/**/*.js"],
   "exclude": ["node_modules"]

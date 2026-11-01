@@ -1,5 +1,5 @@
 // Music (1, 2, 7): follows MPRIS players, shows a compact view on the closed island and a
-// music page with art, controls and a seek bar when open.
+// music page with art, controls and a seek bar when open. Feeds the track to Lyrics (3, 4).
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -7,6 +7,7 @@ import Graphene from 'gi://Graphene';
 import Soup from 'gi://Soup';
 import St from 'gi://St';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
+import {Lyrics} from './lyrics.js';
 
 const PREFIX = 'org.mpris.MediaPlayer2.';
 const PATH = '/org/mpris/MediaPlayer2';
@@ -45,6 +46,8 @@ export class Music {
         this._dragging = false;
         this._artUrl = null;
         this._bars = []; // [actor, ms]
+        this._lyrics = new Lyrics(island, this._soup);
+        this._lyrics.page.connectObject('notify::mapped', () => this._syncTick(true), this);
 
         this._buildCompact();
         this._buildPage();
@@ -146,6 +149,7 @@ export class Music {
         const info = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
         info.add_child(this._title);
         info.add_child(this._artist);
+        info.add_child(this._lyrics.line);
         info.add_child(this._pageControls.box);
         info.add_child(seek);
         this.page = new St.BoxLayout({style_class: 'revelio-music-page', x_expand: true});
@@ -202,6 +206,7 @@ export class Music {
         if (!best) {
             this._island.setCompact(null);
             this._island.removePage(this.page);
+            this._lyrics.setTrack(null);
             this._syncTick(false);
             return;
         }
@@ -222,6 +227,7 @@ export class Music {
         const artists = get('xesam:artist');
         return {
             title: typeof get('xesam:title') === 'string' ? get('xesam:title') : '',
+            album: typeof get('xesam:album') === 'string' ? get('xesam:album') : '',
             artist: Array.isArray(artists) ? artists.join(', ') : String(artists ?? ''),
             artUrl: get('mpris:artUrl') ?? '',
             length: Number(get('mpris:length') ?? 0),
@@ -236,7 +242,12 @@ export class Music {
         const text = m.artist ? `${m.title} - ${m.artist}` : m.title;
         const trackChanged = this._trackKey !== `${m.trackId}|${text}`;
         this._trackKey = `${m.trackId}|${text}`;
+        if (trackChanged)
+            this._setPos(0); // re-read below when visible
+        else if (playing !== this._playing)
+            this._setPos(this._now()); // rebase, or pausing jumps back to the last read position
         this._playing = playing;
+        this._lyrics.setTrack(m);
 
         this._marqueeText.forEach(l => (l.text = text));
         this._title.text = m.title;
@@ -360,6 +371,13 @@ export class Music {
         this._pos = us;
         this._posAt = GLib.get_monotonic_time();
         this._renderPos();
+        this._syncLyrics();
+    }
+
+    // Lyrics' line timer runs only while the music or lyrics page is on screen and playing.
+    _syncLyrics() {
+        const visible = !!this._player && (this.page.mapped || this._lyrics.page.mapped);
+        this._lyrics.sync(this._now(), visible && this._playing);
     }
 
     _renderPos() {
@@ -377,7 +395,7 @@ export class Music {
 
     _syncTick(reread) {
         const visible = !!this._player && this.page.mapped;
-        if (visible && reread)
+        if (reread && this._player && (visible || this._lyrics.page.mapped))
             this._readPosition();
         const want = visible && this._playing;
         if (want && !this._tickId) {
@@ -391,6 +409,7 @@ export class Music {
         }
         if (visible)
             this._renderPos();
+        this._syncLyrics();
     }
 
     // Position never arrives via PropertiesChanged, so ask for it.
@@ -432,6 +451,7 @@ export class Music {
             this._island.removePage(this.page);
         }
         this._player = null;
+        this._lyrics.destroy(); // before the page, which holds its line label
         for (const a of [this._compact.left, this._compact.right, ...this._beats, this.page])
             a.destroy();
     }

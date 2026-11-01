@@ -63,3 +63,19 @@
     font-feature-settings: "tnum";
     padding-left: 8px;
 }
+
+/* Lyrics: current line on the music page, scrolling page */
+.revelio-lyric-line {
+    color: #ddd;
+    font-size: 9pt;
+    font-style: italic;
+}
+.revelio-lyrics-page { padding: 0 20px; }
+.revelio-lyric {
+    color: #777;
+    padding: 2px 0;
+}
+.revelio-lyric:active {
+    color: #fff;
+    font-weight: bold;
+}
