@@ -105,7 +105,10 @@ export class Island {
                 const target = global.stage.get_event_actor(event);
                 if (this._rightWing.contains(target) || (this._expanded && this._open.contains(target)))
                     return Clutter.EVENT_PROPAGATE;
-                this._setExpanded(!this._expanded);
+                // With hover-to-open the pointer is always over the open island, so a click there
+                // would close it and the hover reopen it. Clicks only open; leaving closes.
+                if (!this._expanded || !this._settings.get_boolean('expand-on-hover'))
+                    this._setExpanded(!this._expanded);
                 return Clutter.EVENT_STOP;
             },
             'key-press-event', (_a, event) => {
@@ -312,9 +315,12 @@ export class Island {
         if (expanded === this._expanded)
             return;
         this._expanded = expanded;
+        // Jump to the compact's page only when it changed since the last open; else keep the tab.
         const i = this._pages.indexOf(this._compact?.page);
-        if (expanded && i > 0)
+        if (expanded && i > 0 && this._compact !== this._openedCompact)
             this._showPage(i);
+        if (expanded)
+            this._openedCompact = this._compact;
         if (expanded)
             this.actor.add_style_pseudo_class('expanded');
         else
