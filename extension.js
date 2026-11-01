@@ -14,7 +14,9 @@ export default class RevelioExtension extends Extension {
         this._island = new Island(this._settings);
         this._music = new Music(this._island);
         this._popups = new Popups(this._island);
-        this._popupFeatures = [VolumePopup, BatteryPopup, HeadphonesPopup].map(F => new F(this._popups));
+        const volume = new VolumePopup(this._popups), battery = new BatteryPopup(this._popups);
+        this._popupFeatures = [volume, battery, new HeadphonesPopup(this._popups)];
+        this._island.setStatus(volume.icon, battery.icon);
 
         // Lock is covered by having no `session-modes` (we get disabled). Screen off isn't:
         // watch Mutter's PowerSaveMode (0 = on) and pause the island.
@@ -43,6 +45,7 @@ export default class RevelioExtension extends Extension {
         this._cancellable.cancel();
         this._displayConfig?.disconnectObject(this);
         this._displayConfig = null;
+        this._island.setStatus(null, null);
         this._popupFeatures.forEach(f => f.destroy());
         this._popupFeatures = null;
         this._popups.destroy();
