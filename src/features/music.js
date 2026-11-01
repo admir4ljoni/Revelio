@@ -26,6 +26,7 @@ const PlayerProxy = Gio.DBusProxy.makeProxyWrapper(`<node><interface name="${IFA
 
 const MARQUEE_PX_PER_S = 30;
 const BEAT_MS = [380, 290, 340, 430]; // one per bar; uneven so it doesn't look mechanical
+const BAR_IDLE = 0.35; // scale_y while paused
 const ART_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'revelio@midra', 'art']);
 
 const fmt = us => {
@@ -259,7 +260,7 @@ export class Music {
         }
         this._slider.reactive = !!proxy.CanSeek && m.length > 0;
         this._setArt(m.artUrl);
-        this._syncAnimations();
+        this._syncAnimations(trackChanged);
         this._syncTick(trackChanged);
     }
 
@@ -312,7 +313,9 @@ export class Music {
 
     // --- animations: only while playing and on screen (unmapped = island open, hidden or screen off) ---
 
-    _syncAnimations() {
+    _syncAnimations(reset = false) {
+        if (reset)
+            this._marqueeBox.translation_x = 0;
         this._syncMarquee();
         this._bars.forEach(([bar, ms]) => this._syncBar(bar, ms));
     }
@@ -320,10 +323,11 @@ export class Music {
     _syncMarquee() {
         const playing = !!this._player && this._playing;
         const box = this._marqueeBox;
-        box.remove_all_transitions();
-        box.translation_x = 0;
-        if (!box.mapped)
+        box.remove_all_transitions(); // leaves translation_x where it was, so a pause freezes the text
+        if (!box.mapped) {
+            box.translation_x = 0;
             return; // leave the layout alone, or it reflows to full width and remeasures stale on remap
+        }
         // Right after a remap the actor isn't allocated yet and .width reports its preferred width;
         // the wing is fixed-size, so use the last real width.
         if (this._marquee.has_allocation())
@@ -331,23 +335,45 @@ export class Music {
         const [, textW] = this._marqueeText[0].get_preferred_width(-1);
         const overflow = textW > (this._marqueeW ?? Infinity);
         this._marqueeText[1].visible = overflow;
+        if (!overflow)
+            box.translation_x = 0;
         if (!overflow || !playing)
             return;
         const dist = textW + box.get_theme_node().get_length('spacing');
-        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        box.ease(/** @type {any} */ ({ // snake_case: Shell's ease() needs it to attach repeatCount
+        const msPerPx = 1000 / (MARQUEE_PX_PER_S * St.ThemeContext.get_for_stage(global.stage).scale_factor);
+        const loop = () => box.ease(/** @type {any} */ ({ // snake_case: Shell's ease() needs it to attach repeatCount
             translation_x: -dist,
-            duration: dist / (MARQUEE_PX_PER_S * scale) * 1000,
+            duration: dist * msPerPx,
             mode: Clutter.AnimationMode.LINEAR,
             repeatCount: -1,
+        }));
+        // Resuming mid-scroll: finish this lap from where it froze, then loop from the start.
+        const x = box.translation_x;
+        if (!x)
+            return loop();
+        box.ease(/** @type {any} */ ({
+            translation_x: -dist,
+            duration: Math.max(1, (dist + x) * msPerPx),
+            mode: Clutter.AnimationMode.LINEAR,
+            onStopped: finished => {
+                if (!finished)
+                    return;
+                box.translation_x = 0;
+                loop();
+            },
         }));
     }
 
     _syncBar(bar, ms) {
         bar.remove_all_transitions();
-        bar.scale_y = 0.35;
-        if (!this._player || !this._playing || !bar.mapped)
+        if (!bar.mapped) {
+            bar.scale_y = BAR_IDLE;
             return;
+        }
+        if (!this._player || !this._playing) {
+            bar.ease({scale_y: BAR_IDLE, duration: 400, mode: Clutter.AnimationMode.EASE_OUT_QUAD}); // settle, don't snap
+            return;
+        }
         bar.ease(/** @type {any} */ ({
             scale_y: 1,
             duration: ms,
