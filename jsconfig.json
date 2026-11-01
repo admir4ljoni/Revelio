@@ -4,9 +4,10 @@
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "checkJs": true,
+    "strict": false,
     "noEmit": true,
     "lib": ["ES2022"],
-    "types": ["@girs/gjs", "@girs/gnome-shell/ambient"]
+    "types": ["@girs/gjs", "@girs/gnome-shell/ambient", "@girs/gnome-shell/extensions/global", "@girs/gtk-4.0/ambient"]
   },
   "include": ["*.js", "src/**/*.js", "tests/**/*.js"],
   "exclude": ["node_modules"]
