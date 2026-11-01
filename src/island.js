@@ -22,6 +22,7 @@ export class Island {
         this._timeoutId = 0;
         this._scrollAcc = 0;
         this._compact = null;
+        this._popup = null;
 
         this.actor = new St.Widget({
             style_class: 'revelio-island',
@@ -105,6 +106,17 @@ export class Island {
     // or null. Actors stay owned by the feature. Opening the island then shows `page`.
     setCompact(compact) {
         this._compact = compact;
+        this._applyCompact();
+    }
+
+    // A short message (see popups.js), {left, right} or null. Covers the compact view while set.
+    setPopup(popup) {
+        this._popup = popup;
+        this._applyCompact();
+    }
+
+    _applyCompact() {
+        const compact = this._popup ?? this._compact;
         this._leftWing.set_child(compact?.left ?? null);
         this._rightWing.set_child(compact?.right ?? null);
         this._beatLeft.set_child(compact?.beatLeft ?? null);
@@ -149,7 +161,7 @@ export class Island {
             return;
         const look = this._settings.get_string('idle-look');
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const compact = this._compact;
+        const compact = this._popup ?? this._compact;
         let [w, h] = COLLAPSED[look];
         if (this._expanded)
             [w, h] = [this._settings.get_uint('expanded-width'), EXPANDED_HEIGHT];
@@ -283,6 +295,7 @@ export class Island {
         if (this._unredirectOff)
             global.compositor.enable_unredirect();
         // Leave feature actors to their owners; only the built-in ones die with the actor.
+        this._popup = null;
         this.setCompact(null);
         if (this._page !== 0)
             this._pageBin.set_child(this._pages[0]);
