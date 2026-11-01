@@ -210,3 +210,20 @@
     font-weight: 800;
     font-feature-settings: "tnum";
 }
+
+/* Notification pop-up text on the right wing */
+.revelio-popup-detail { font-size: 9pt; color: #ccc; }
+
+/* Clipboard page */
+.revelio-clip-item { border-radius: 6px; padding: 2px 6px; }
+.revelio-clip-item:hover { background-color: rgba(255, 255, 255, 0.15); }
+.revelio-clip-text { font-size: 9pt; }
+
+/* Script reader page */
+.revelio-script-page { padding: 8px 12px 14px 16px; spacing: 8px; }
+.revelio-script-page:focus .revelio-script-text { color: #fff; }
+.revelio-script-text { font-size: 14pt; font-weight: bold; color: #ddd; }
+
+/* Screen recorder page */
+.revelio-recorder { spacing: 4px; padding: 6px 12px; }
+.revelio-recorder-icon { icon-size: 32px; color: #e01b24; }
