@@ -7,6 +7,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const ANIM_MS = 250;
+const SLIDE_PX = 40; // page switch slides the new page in this far
 const EXPANDED_HEIGHT = 140;
 const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [230, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
@@ -61,13 +62,14 @@ export class Island {
         this._pageBin = new St.Bin({x_expand: true, y_expand: true});
         this._dots = new St.BoxLayout({style_class: 'revelio-dots', x_expand: true, y_expand: true,
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.END});
-        const center = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true});
+        const center = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, clip_to_allocation: true});
         center.add_child(this._pageBin);
         center.add_child(this._dots);
+        // Full-height strips, so the space above and below the arrow clicks too.
         const arrow = (icon, step) => {
-            const b = new St.Button({style_class: 'revelio-arrow', can_focus: true, y_align: Clutter.ActorAlign.CENTER,
-                child: new St.Icon({icon_name: icon})});
-            b.connect('clicked', () => this._showPage((this._page + step + this._pages.length) % this._pages.length));
+            const b = new St.Button({style_class: 'revelio-arrow', can_focus: true, y_expand: true,
+                child: new St.Icon({icon_name: icon, y_align: Clutter.ActorAlign.CENTER})});
+            b.connect('clicked', () => this._showPage((this._page + step + this._pages.length) % this._pages.length, step));
             return b;
         };
         this._arrows = [arrow('go-previous-symbolic', -1), arrow('go-next-symbolic', 1)];
@@ -347,10 +349,21 @@ export class Island {
         this._relayout(true);
     }
 
-    _showPage(i) {
+    // step (±1) slides the new page in from that side.
+    _showPage(i, step = 0) {
         this._page = i;
         this._pageBin.set_child(this._pages[i]);
         this._renderDots();
+        const bin = this._pageBin;
+        bin.remove_all_transitions();
+        if (!step) {
+            bin.translation_x = 0;
+            bin.opacity = 255;
+            return;
+        }
+        bin.translation_x = step * SLIDE_PX * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        bin.opacity = 0;
+        bin.ease(/** @type {any} */ ({translation_x: 0, opacity: 255, duration: ANIM_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD}));
     }
 
     _renderDots() {
