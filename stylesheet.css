@@ -175,26 +175,42 @@
 
 /* Today page */
 .revelio-today-page {
-    padding: 10px 18px;
-    spacing: 16px;
+    padding: 4px 26px 16px 26px;
+    spacing: 26px;
 }
+.revelio-today-date { width: 120px; }
+.revelio-today-weekday { color: #78aeed; font-weight: bold; font-size: 9pt; }
 .revelio-today-day {
-    font-size: 24pt;
+    font-size: 40pt;
     font-weight: 800;
+    font-feature-settings: "tnum";
 }
-.revelio-today-events { padding-top: 4px; }
-.revelio-today-event { font-size: 9pt; }
+.revelio-today-month { color: #ccc; }
+.revelio-caption { color: #777; font-size: 8pt; font-weight: bold; padding-bottom: 6px; }
+.revelio-today-right { padding-top: 6px; }
+.revelio-today-events { spacing: 6px; }
+.revelio-event {
+    spacing: 10px;
+    padding: 7px 10px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.07);
+}
+.revelio-event-bar { width: 3px; border-radius: 2px; background-color: #78aeed; }
+.revelio-event-title { font-size: 10pt; font-weight: bold; }
 .revelio-cal-head, .revelio-cal-day {
-    font-size: 8pt;
-    width: 20px;
+    font-size: 9pt;
+    width: 26px;
+    height: 22px;
     text-align: center;
     font-feature-settings: "tnum";
 }
-.revelio-cal-head { color: #888; font-weight: bold; }
-.revelio-cal-day:past { color: #555; }
+.revelio-cal-head { color: #777; font-weight: bold; }
+.revelio-cal-day { padding-top: 3px; }
+.revelio-cal-day:past { color: #444; }
+.revelio-cal-day:other-month { color: #888; }
 .revelio-cal-event { color: #78aeed; font-weight: bold; }
 .revelio-cal-day:today {
-    background-color: #fff;
+    background-color: #78aeed;
     color: #000;
     border-radius: 99px;
     font-weight: bold;
