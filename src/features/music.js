@@ -463,7 +463,9 @@ export class Music {
     _renderPos() {
         const len = this._length();
         const now = Math.min(this._now(), len || Infinity);
-        if (!this._dragging)
+        // Off stage, a value change makes AT-SPI clients query the unstaged slider, which floods the
+        // log with "not in the stage". Mapping the page re-renders (see _syncTick).
+        if (!this._dragging && this._slider.mapped)
             this._slider.value = len > 0 ? now / len : 0;
         this._showTime(now);
     }

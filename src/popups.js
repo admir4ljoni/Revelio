@@ -37,10 +37,6 @@ export class Popups {
         this._level.visible = this._percent.visible = level !== null;
         this._detail.visible = level === null && !!detail;
         this._detail.text = detail;
-        if (level !== null) {
-            this._level.value = level;
-            this._percent.text = `${Math.round(level * 100)}%`;
-        }
         this._clear();
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
             this._timeoutId = 0;
@@ -48,6 +44,11 @@ export class Popups {
             return GLib.SOURCE_REMOVE;
         });
         this._island.setPopup(this._popup);
+        // Only once on stage: an off-stage value change makes AT-SPI clients query it ("not in the stage").
+        if (level !== null) {
+            this._level.value = level;
+            this._percent.text = `${Math.round(level * 100)}%`;
+        }
     }
 
     _clear() {
