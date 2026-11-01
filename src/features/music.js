@@ -28,6 +28,7 @@ const MARQUEE_PX_PER_S = 30;
 const BEAT_MS = [380, 290, 340, 430]; // one per bar; uneven so it doesn't look mechanical
 const BAR_IDLE = 0.35; // scale_y while paused
 const ART_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), 'revelio@midra', 'art']);
+const ART_CACHE = 10; // album covers kept in memory
 
 const fmt = us => {
     const s = Math.max(0, Math.floor(us / 1e6));
@@ -46,6 +47,7 @@ export class Music {
         this._posAt = 0;
         this._dragging = false;
         this._artUrl = null;
+        this._artCache = new Map(); // url -> GLib.Bytes, insertion order = age
         this._bars = []; // [actor, ms]
         this._lyrics = new Lyrics(island, this._soup);
         this._lyrics.page.connectObject('notify::mapped', () => this._syncTick(true), this);
@@ -264,15 +266,19 @@ export class Music {
         this._syncTick(trackChanged);
     }
 
-    // --- album art: file:// directly, http(s) downloaded once into ~/.cache ---
+    // --- album art: kept in memory, since browsers delete their file:// art when the media
+    // session switches (play a voice note, come back: same URL, file gone). http(s) is also
+    // cached on disk across sessions. ---
 
     _setArt(url) {
         if (url === this._artUrl)
             return;
         this._artUrl = url;
-        this._showArt(null);
+        this._showArt(this._artCache.get(url) ?? null);
+        if (this._artCache.has(url))
+            return;
         if (url.startsWith('file://')) {
-            this._showArt(Gio.File.new_for_uri(url));
+            this._loadArt(url, Gio.File.new_for_uri(url));
             return;
         }
         if (!/^https?:\/\//.test(url))
@@ -280,7 +286,7 @@ export class Music {
         const file = Gio.File.new_for_path(GLib.build_filenamev(
             [ART_DIR, GLib.compute_checksum_for_string(GLib.ChecksumType.SHA1, url, -1)]));
         if (file.query_exists(null)) {
-            this._showArt(file);
+            this._loadArt(url, file);
             return;
         }
         let msg;
@@ -296,8 +302,7 @@ export class Music {
                     return;
                 GLib.mkdir_with_parents(ART_DIR, 0o755);
                 file.replace_contents(bytes.toArray(), null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
-                if (this._artUrl === url)
-                    this._showArt(file);
+                this._gotArt(url, bytes);
             } catch (e) {
                 if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                     log(`Revelio: album art ${url}: ${e.message}`);
@@ -305,8 +310,28 @@ export class Music {
         });
     }
 
-    _showArt(file) {
-        const gicon = file ? new Gio.FileIcon({file}) : null;
+    _loadArt(url, file) {
+        file.load_contents_async(this._cancellable, (_f, res) => {
+            try {
+                const [, contents] = file.load_contents_finish(res);
+                this._gotArt(url, new GLib.Bytes(contents));
+            } catch (e) {
+                if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                    log(`Revelio: album art ${url}: ${e.message}`);
+            }
+        });
+    }
+
+    _gotArt(url, bytes) {
+        this._artCache.set(url, bytes);
+        if (this._artCache.size > ART_CACHE)
+            this._artCache.delete(this._artCache.keys().next().value); // oldest first
+        if (this._artUrl === url)
+            this._showArt(bytes);
+    }
+
+    _showArt(bytes) {
+        const gicon = bytes ? new Gio.BytesIcon({bytes}) : null;
         this._art.gicon = gicon;
         this._compactArt.gicon = gicon;
     }
@@ -472,6 +497,7 @@ export class Music {
         for (const e of this._players.values())
             e.proxy?.disconnectObject(this);
         this._players.clear();
+        this._artCache.clear();
         if (this._player) {
             this._island.showCompact(this._compact, false);
             this._island.removePage(this.page);
