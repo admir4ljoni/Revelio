@@ -91,11 +91,14 @@ export class Lyrics {
     _scroll(animate) {
         const col = this._column;
         col.remove_all_transitions();
-        if (!col.mapped || !this.page.has_allocation() || !this._labels.length)
+        // Not has_allocation(): the active line's bold restyle just queued a relayout, so it's
+        // false here every line. The allocation box forces that layout and gives the real height.
+        const pageH = col.mapped ? this.page.get_allocation_box().get_height() : 0;
+        if (!pageH || !this._labels.length)
             return;
         // Lines are single-line labels, so all the same height.
         const [, lineH] = this._labels[0].get_preferred_height(-1);
-        const y = Math.round(this.page.height / 2 - (Math.max(0, this._index) + 0.5) * lineH);
+        const y = Math.round(pageH / 2 - (Math.max(0, this._index) + 0.5) * lineH);
         if (animate)
             col.ease(/** @type {any} */ ({translation_y: y, duration: SCROLL_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD}));
         else
