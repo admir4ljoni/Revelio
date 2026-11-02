@@ -8,6 +8,9 @@ import {parse as parseTag} from './tasks.js';
 
 export const WALLETS = {cash: 'Cash', ewallet: 'E-wallet'};
 export const PRESETS = ['food', 'transport', 'health', 'bills', 'shopping', 'fun', 'other'];
+// Fixed costs: they shrink the month's money but don't count against today or the spending pace
+// (rent paid today isn't today's spending; untracked, from a recount, was spent on earlier days).
+export const FIXED = ['bills', 'untracked'];
 export const LATE_DAY = 25; // money added from this day on counts for next month by default
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
     'October', 'November', 'December'];
@@ -81,7 +84,7 @@ export function balances(entries, upTo = null) {
 }
 
 export function summary(entries, month) {
-    let carry = 0, income = 0, spent = 0;
+    let carry = 0, income = 0, spent = 0, fixed = 0;
     const cats = new Map();
     for (const e of entries) {
         if (e.kind === 'move')
@@ -94,12 +97,14 @@ export function summary(entries, month) {
         } else if (m === month) {
             spent += e.amount;
             const c = e.category || 'other';
+            if (FIXED.includes(c))
+                fixed += e.amount;
             cats.set(c, (cats.get(c) ?? 0) + e.amount);
         }
     }
     const budget = carry + income;
     return {
-        month, carry, income, budget, spent,
+        month, carry, income, budget, spent, fixed,
         left: budget - spent,
         used: budget > 0 ? spent / budget : null, // null: nothing to spend from
         categories: [...cats].sort((a, b) => b[1] - a[1]).map(([tag, amount]) => ({tag, amount})),
@@ -107,14 +112,16 @@ export function summary(entries, month) {
 }
 
 // The month so far, plus what today can take so the rest of the month gets the same each day.
-// Untracked (from a recount) was spent on earlier days, so it doesn't eat into today.
+// `paceUsed`: share of the day-to-day money (all but fixed costs) spent, to compare with `pace`.
 export function today(entries, date) {
     const s = summary(entries, date.slice(0, 7));
     const day = Number(date.slice(8)), days = daysIn(s.month);
     const spentToday = entries.reduce((n, e) => n +
-        (e.kind === 'out' && e.date === date && e.category !== 'untracked' ? e.amount : 0), 0);
+        (e.kind === 'out' && e.date === date && !FIXED.includes(e.category) ? e.amount : 0), 0);
     const perDay = (s.left + spentToday) / (days - day + 1);
-    return {...s, day, days, spentToday, perDay, todayLeft: perDay - spentToday};
+    const pool = s.budget - s.fixed;
+    return {...s, day, days, pace: day / days, spentToday, perDay, todayLeft: perDay - spentToday,
+        paceUsed: pool > 0 ? (s.spent - s.fixed) / pool : null};
 }
 
 // Up to two short pieces of advice for the month so far, most urgent first.
@@ -122,24 +129,23 @@ export function tips(entries, date) {
     const t = today(entries, date);
     if (t.budget <= 0 && !t.spent)
         return ['Add this month’s money with + Money to see your budget.'];
-    const out = [];
-    const pace = t.day / t.days;
+    const out = [], pace = t.pace, daily = t.spent - t.fixed;
     if (t.left < 0)
         out.push(`Over by ${idr(-t.left)}; it comes out of next month.`);
-    else if (t.used !== null && t.used > pace + 0.1)
-        out.push(`${pct(t.used)} spent, ${pct(pace)} of the month gone. Keep to ${idr(t.perDay)} a day.`);
+    else if (t.paceUsed !== null && t.paceUsed > pace + 0.1)
+        out.push(`${pct(t.paceUsed)} of day-to-day money spent, ${pct(pace)} of the month gone. Keep to ${idr(t.perDay)} a day.`);
     const untracked = t.categories.find(c => c.tag === 'untracked');
     if (untracked && untracked.amount >= 0.15 * t.spent)
         out.push(`${idr(untracked.amount)} is untracked. Logging as you spend sharpens these tips.`);
-    const top = t.categories[0];
-    if (top && t.categories.length > 1 && top.tag !== 'untracked' && top.amount >= 0.4 * t.spent) {
+    const dayToDay = t.categories.filter(c => !FIXED.includes(c.tag)), top = dayToDay[0];
+    if (top && dayToDay.length > 1 && top.amount >= 0.4 * daily) {
         const prev = summary(entries, addMonths(t.month, -1));
         const before = prev.categories.find(c => c.tag === top.tag);
-        out.push(`${label(top.tag)} is ${pct(top.amount / t.spent)} of your spending` +
-            `${before ? ` (${pct(before.amount / prev.spent)} last month)` : ''}.`);
+        out.push(`${label(top.tag)} is ${pct(top.amount / daily)} of your day-to-day spending` +
+            `${before ? ` (${pct(before.amount / (prev.spent - prev.fixed))} last month)` : ''}.`);
     }
-    if (!out.length && t.left >= 0 && t.spent) {
-        const end = t.budget - t.spent / pace; // left at month end if spending keeps this pace
+    if (!out.length && t.left >= 0 && daily > 0) {
+        const end = t.budget - t.fixed - daily / pace; // left at month end if day-to-day spending keeps this pace
         out.push(end > 0 ? `On track: about ${idr(end)} left at the end of the month.`
             : `At this pace the money runs out before the month ends. Aim for ${idr(t.perDay)} a day.`);
     }

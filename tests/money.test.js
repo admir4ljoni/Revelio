@@ -50,14 +50,29 @@ const t = M.today(e, '2026-11-02');
 eq([t.day, t.days, t.spentToday], [2, 30, 40000]); // the recount's untracked isn't today's
 eq(Math.round(t.perDay), Math.round((4500000 + 40000) / 29));
 eq(Math.round(t.todayLeft), Math.round(t.perDay - 40000));
-eq(M.tips(e, '2026-11-02').length, 1);
+eq(M.tips(e, '2026-11-02')[1], 'Food is 60% of your day-to-day spending (100% last month).');
 eq(M.tips(e, '2026-11-02')[0].startsWith('Rp 300.000 is untracked'), true);
 eq(M.tips([], '2026-11-02'), ['Add this month’s money with + Money to see your budget.']);
 eq(M.tips(e, '2026-10-30')[0], 'Over by Rp 100.000; it comes out of next month.');
 // Spent 50% by day 5 of 30: ahead of pace.
 const fast = [{kind: 'in', amount: 1000000, wallet: 'cash', date: '2026-11-01'},
     {kind: 'out', amount: 500000, wallet: 'cash', date: '2026-11-03', category: 'food'}];
-eq(M.tips(fast, '2026-11-05')[0].startsWith('50% spent, 17% of the month gone'), true);
+eq(M.tips(fast, '2026-11-05')[0].startsWith('50% of day-to-day money spent, 17% of the month gone'), true);
+// Rent paid today is a fixed cost: it lowers the allowance but isn't today's spending or ahead of pace.
+const rent = [{kind: 'in', amount: 3000000, wallet: 'cash', date: '2026-11-01'},
+    {kind: 'out', amount: 1500000, wallet: 'cash', date: '2026-11-02', category: 'bills'},
+    {kind: 'out', amount: 20000, wallet: 'cash', date: '2026-11-02', category: 'food'}];
+const r = M.today(rent, '2026-11-02');
+eq([r.spentToday, Math.round(r.todayLeft), r.fixed], [20000, Math.round(1500000 / 29) - 20000, 1500000]);
+eq(M.tips(rent, '2026-11-02')[0].startsWith('On track'), true);
+// Food leads day-to-day spending: compared with last month.
+const food = [{kind: 'in', amount: 3000000, wallet: 'cash', date: '2026-10-01'},
+    {kind: 'out', amount: 100000, wallet: 'cash', date: '2026-10-05', category: 'food'},
+    {kind: 'out', amount: 300000, wallet: 'cash', date: '2026-10-06', category: 'fun'},
+    {kind: 'out', amount: 300000, wallet: 'cash', date: '2026-11-05', category: 'food'},
+    {kind: 'out', amount: 100000, wallet: 'cash', date: '2026-11-06', category: 'fun'},
+    {kind: 'out', amount: 900000, wallet: 'cash', date: '2026-11-06', category: 'bills'}];
+eq(M.tips(food, '2026-11-15'), ['Food is 75% of your day-to-day spending (25% last month).']);
 const slow = [{kind: 'in', amount: 3000000, wallet: 'cash', date: '2026-11-01'},
     {kind: 'out', amount: 100000, wallet: 'cash', date: '2026-11-10', category: 'food'}];
 eq(M.tips(slow, '2026-11-10'), ['On track: about Rp 2.700.000 left at the end of the month.']);
