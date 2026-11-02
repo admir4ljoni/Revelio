@@ -230,8 +230,9 @@ export class Tasks {
         this._schedule();
 
         const tags = T.tags(this._tasks);
-        const hasOverdue = this._tasks.some(t => T.overdue(t, now));
-        if (this._filter && !(this._filter === T.OVERDUE ? hasOverdue : tags.includes(this._filter)))
+        // Stays while selected, so ticking the last overdue task doesn't jump back to All.
+        const hasOverdue = this._filter === T.OVERDUE || this._tasks.some(t => T.overdue(t, now));
+        if (this._filter && this._filter !== T.OVERDUE && !tags.includes(this._filter))
             this._filter = null; // its last task went
         this._chips.destroy_all_children();
         const chips = [null, ...hasOverdue ? [T.OVERDUE] : [], ...tags];

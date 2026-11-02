@@ -116,8 +116,9 @@ class TasksWindow {
         if (this._editing && !this._tasks.includes(this._editing))
             this._setEditing(null);
         const tags = T.tags(this._tasks);
-        const hasOverdue = this._tasks.some(t => T.overdue(t, now));
-        if (this._filter && !(this._filter === T.OVERDUE ? hasOverdue : tags.includes(this._filter)))
+        // Stays while selected, so ticking the last overdue task doesn't jump back to All.
+        const hasOverdue = this._filter === T.OVERDUE || this._tasks.some(t => T.overdue(t, now));
+        if (this._filter && this._filter !== T.OVERDUE && !tags.includes(this._filter))
             this._filter = null;
         for (let c; (c = this._chips.get_first_child());)
             this._chips.remove(c);
