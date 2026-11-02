@@ -84,7 +84,7 @@ export class Money {
         for (const [key, name] of [['total', 'Total'], ['cash', 'Cash'], ['ewallet', 'E-wallet']]) {
             const r = {key, used: 0, pace: null, state: 'ok'};
             r.area = new St.DrawingArea({style_class: 'revelio-money-ring'});
-            r.area.connect('repaint', area => paintRing(area, this._hidden ? 0 : r.used, RING[r.state], this._hidden ? null : r.pace));
+            r.area.connect('repaint', area => paintRing(area, r.used, RING[r.state], r.pace));
             r.value = new St.Label({style_class: 'revelio-money-ring-value', x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER});
             const dial = new St.Widget({layout_manager: new Clutter.BinLayout()});
@@ -344,7 +344,8 @@ export class Money {
         if (this._form)
             return;
         const date = M.iso(new Date()), t = M.today(this._entries, date);
-        const hide = this._hidden, idr = n => (hide ? 'Rp •••' : M.idr(n)), pct = x => (hide ? '•••' : M.pct(x));
+        // The eye hides amounts only; percentages and rings stay.
+        const hide = this._hidden, idr = n => (hide ? 'Rp •••' : M.idr(n)), pct = M.pct;
         this._eyeIcon.icon_name = hide ? 'view-conceal-symbolic' : 'view-reveal-symbolic';
         this._eye.accessible_name = hide ? 'Show amounts' : 'Hide amounts';
         const monthName = M.monthName(t.month).split(' ')[0];
