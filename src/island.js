@@ -10,7 +10,7 @@ const ANIM_MS = 250;
 const SLIDE_PX = 40; // page switch slides the new page in this far
 const EXPANDED_HEIGHT = 236;
 // Tabs sit in this order whenever they come and go (Music appears with a player).
-const TAB_ORDER = ['Music', 'Focus', 'Tasks', 'Today', 'Shelf', 'Clipboard', 'Script', 'Record', 'System', 'Power'];
+const TAB_ORDER = ['Music', 'Focus', 'Tasks', 'Today', 'Shelf', 'Notifications', 'Clipboard', 'Script', 'Record', 'System', 'Power'];
 const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [230, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;

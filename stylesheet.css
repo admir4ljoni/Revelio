@@ -307,6 +307,14 @@
 /* Notification pop-up text on the right wing */
 .revelio-popup-detail { font-size: 9pt; color: #ccc; }
 
+/* Notification history page */
+.revelio-notif { padding: 0 6px 0 0; }
+.revelio-notif-open { padding: 7px 4px 7px 10px; border-radius: 10px; }
+.revelio-notif-icon { icon-size: 22px; padding-top: 2px; }
+.revelio-notif-app { color: #aaa; font-size: 8.5pt; font-weight: bold; }
+.revelio-notif-title { font-size: 10pt; font-weight: bold; }
+.revelio-notif-body { font-size: 9pt; }
+
 /* Clipboard page */
 .revelio-clip-item { padding: 7px 10px; }
 .revelio-clip-text { font-size: 10pt; color: #eee; }

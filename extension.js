@@ -19,7 +19,7 @@ import {Recorder} from './src/features/recorder.js';
 
 // Add-ons are off by default and come and go with their switch.
 const ADDONS = {
-    'addon-notifications': ext => new Notifications(ext._popups, ext._settings),
+    'addon-notifications': ext => new Notifications(ext._island, ext._popups, ext._settings),
     'addon-clipboard': ext => new Clipboard(ext._island),
     'addon-script': ext => new Script(ext._island, ext._settings),
     'addon-recorder': ext => new Recorder(ext._island),
