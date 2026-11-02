@@ -1,5 +1,5 @@
-// Money: a monthly budget on one page. Add money (cash or e-wallet), log spending ("25k lunch #food"),
-// move money between wallets, and recount what you actually hold (the gap is logged as Untracked).
+// Money: a monthly budget on one page. Add money (cash or e-wallet), log spending ("25k lunch #food";
+// Untracked for money that went missing), and move money between wallets, each on any past day.
 // The ring shows how much of the month's money is spent, with a tick for how much of the month has
 // gone. Stored in ~/.local/share/revelio@midra/money.json. Logic lives in lib/money.js.
 // Report writes ~/Documents/Revelio/Money.xlsx (a sheet per month, rebuilt each time) and opens it.
@@ -18,7 +18,6 @@ const FORMS = {
     in: {title: 'Add money', hint: 'Amount and note, e.g. 5jt salary', save: 'Add'},
     out: {title: 'Spend', hint: 'Amount and note, e.g. 25k lunch #food', save: 'Save'},
     move: {title: 'Move money', hint: 'Amount, e.g. 200k', save: 'Move'},
-    recount: {title: 'Recount', hint: 'How much do you have right now?', save: 'Recount'},
 };
 
 const pill = (icon, text) => {
@@ -45,12 +44,12 @@ export class Money {
     constructor(island) {
         this._island = island;
         this._entries = M.clean(store.load('money', []));
-        this._form = null; // 'in' | 'out' | 'move' | 'recount' while a form is open
+        this._form = null; // 'in' | 'out' | 'move' while a form is open
         this._wallet = this._entries.at(-1)?.wallet ?? 'cash';
 
         const actions = new St.BoxLayout({style_class: 'revelio-row'});
         for (const [icon, text, form] of [['list-add-symbolic', 'Money', 'in'], ['list-remove-symbolic', 'Spend', 'out'],
-            ['object-flip-horizontal-symbolic', 'Move', 'move'], ['view-refresh-symbolic', 'Recount', 'recount']]) {
+            ['object-flip-horizontal-symbolic', 'Move', 'move']]) {
             const b = pill(icon, text);
             b.connect('clicked', () => this._openForm(form));
             actions.add_child(b);
@@ -199,7 +198,6 @@ export class Money {
         const f = this._form, date = this._date();
         this._walletSeg.actor.visible = f !== 'move';
         this._moveSeg.actor.visible = f === 'move';
-        this._dateBox.visible = f !== 'recount';
         this._walletSeg.set(this._wallet);
         this._moveSeg.set(this._wallet);
         this._dayLabel.text = M.dayLabel(date, M.iso(new Date()));
@@ -223,7 +221,8 @@ export class Money {
         this._categories.visible = f === 'out';
         if (f === 'out') {
             const used = this._entries.filter(e => e.kind === 'out' && e.category).map(e => e.category);
-            const tags = [...new Set([...M.PRESETS, ...used])].filter(t => t !== 'untracked').slice(0, 10);
+            // Untracked last: money that's gone without knowing where.
+            const tags = [...[...new Set([...M.PRESETS, ...used])].filter(t => t !== 'untracked').slice(0, 9), 'untracked'];
             for (const tag of tags) {
                 const chip = new St.Button({style_class: 'revelio-segment revelio-chip', can_focus: true, label: M.label(tag)});
                 if (tag === this._category)
@@ -235,15 +234,12 @@ export class Money {
                 this._categories.add_child(chip);
             }
         }
-        if (f === 'recount')
-            this._formHint.text = `Logged so far: ${M.idr(M.balances(this._entries)[this._wallet])} in ${M.WALLETS[this._wallet]}. The difference is saved as Untracked.`;
     }
 
     _save() {
         const input = this._entry.text, f = this._form, date = this._date();
         const {amount, note, tag} = M.parseEntry(input);
-        const zero = f === 'recount' && input.trim() === '0';
-        if (!amount && !zero) {
+        if (!amount) {
             this._formHint.text = 'Type an amount, like 25k, 25.000 or 1,5jt.';
             return;
         }
@@ -254,16 +250,8 @@ export class Money {
         } else if (f === 'in') {
             const month = this._month ?? M.defaultMonth(date);
             entry = {kind: 'in', ...entry, ...month !== date.slice(0, 7) ? {month} : {}};
-        } else if (f === 'move') {
-            entry = {kind: 'move', ...entry, to: this._wallet === 'cash' ? 'ewallet' : 'cash'};
         } else {
-            const diff = (zero ? 0 : amount) - M.balances(this._entries)[this._wallet];
-            if (!diff) {
-                this._closeForm();
-                return;
-            }
-            entry = diff < 0 ? {kind: 'out', amount: -diff, wallet: this._wallet, date, note: 'Recount', category: 'untracked'}
-                : {kind: 'in', amount: diff, wallet: this._wallet, date, note: 'Recount'};
+            entry = {kind: 'move', ...entry, to: this._wallet === 'cash' ? 'ewallet' : 'cash'};
         }
         this._change([...this._entries, entry]);
         this._closeForm();

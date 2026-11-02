@@ -9,7 +9,7 @@ import {parse as parseTag} from './tasks.js';
 export const WALLETS = {cash: 'Cash', ewallet: 'E-wallet'};
 export const PRESETS = ['food', 'transport', 'health', 'bills', 'shopping', 'fun', 'other'];
 // Fixed costs: they shrink the month's money but don't count against today or the spending pace
-// (rent paid today isn't today's spending; untracked, from a recount, was spent on earlier days).
+// (rent paid today isn't today's spending; untracked money went missing over earlier days).
 export const FIXED = ['bills', 'untracked'];
 export const LATE_DAY = 25; // money added from this day on counts for next month by default
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',

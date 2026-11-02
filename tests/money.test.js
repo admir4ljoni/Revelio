@@ -49,7 +49,7 @@ eq(M.balances(e, '2026-10-31'), {cash: 0, ewallet: 4900000});
 eq(M.balances(e).cash + M.balances(e).ewallet, 3000000 + 5000000 - 3500000); // moves don't change the total
 
 const t = M.today(e, '2026-11-02');
-eq([t.day, t.days, t.spentToday], [2, 30, 40000]); // the recount's untracked isn't today's
+eq([t.day, t.days, t.spentToday], [2, 30, 40000]); // untracked isn't today's spending
 eq(Math.round(t.perDay), Math.round((4500000 + 40000) / 29));
 eq(Math.round(t.todayLeft), Math.round(t.perDay - 40000));
 eq(M.tips(e, '2026-11-02')[1], 'Food is 60% of your day-to-day spending (100% last month).');
