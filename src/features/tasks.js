@@ -12,6 +12,7 @@ import St from 'gi://St';
 import * as store from '../lib/store.js';
 import * as T from '../lib/tasks.js';
 
+const RING_S = 30, RINGS = 10; // ponytail: fixed; a setting if someone wants it longer or quieter
 const HINT = 'Add a task (#tag category, @tomorrow 9:00 deadline), Enter to save';
 
 export class Tasks {
@@ -21,7 +22,9 @@ export class Tasks {
         this._timeoutId = 0;
         this._editing = null; // the task the entry is renaming
         this._declining = null; // the alert the entry asks a reason for
-        this._alertKey = null; // the alert showing, to sound once
+        this._alertKey = null; // the alert showing, to ring for each new one
+        this._ringId = 0;
+        this._rings = 0;
         this._windowScript = GLib.build_filenamev([extensionPath, 'src', 'tasks-window.js']);
         this._tasks = T.clean(store.load('tasks', []));
         this._filter = null; // category shown, or null for all
@@ -201,6 +204,29 @@ export class Tasks {
         });
     }
 
+    // Like an alarm: now, then every RING_S until answered, at most RINGS times.
+    _ring() {
+        this._stopRinging();
+        if (!this._settings.get_boolean('sounds'))
+            return;
+        const play = () => global.display.get_sound_player().play_from_theme('alarm-clock-elapsed', 'Task due', null);
+        play();
+        this._rings = 1;
+        this._ringId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, RING_S, () => {
+            play();
+            if (++this._rings < RINGS)
+                return GLib.SOURCE_CONTINUE;
+            this._ringId = 0;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _stopRinging() {
+        if (this._ringId)
+            GLib.source_remove(this._ringId);
+        this._ringId = 0;
+    }
+
     _setFilter(tag) {
         this._filter = tag;
         this._render();
@@ -220,11 +246,12 @@ export class Tasks {
             this._alertText.text = `“${this._alert.text}” was due ${T.dueLabel(this._alert.due, now)}${more}`;
             this._compactText.text = this._alert.text;
             const key = `${this._alert.text}@${this._alert.due}`;
-            if (key !== this._alertKey && this._settings.get_boolean('sounds'))
-                global.display.get_sound_player().play_from_theme('alarm-clock-elapsed', 'Task due', null);
+            if (key !== this._alertKey)
+                this._ring();
             this._alertKey = key;
         } else {
             this._alertKey = null;
+            this._stopRinging();
         }
         this._island.showCompact(this._compact, !!this._alert);
         this._schedule();
@@ -291,6 +318,7 @@ export class Tasks {
     }
 
     destroy() {
+        this._stopRinging();
         if (this._timeoutId)
             GLib.source_remove(this._timeoutId);
         this._timeoutId = 0;

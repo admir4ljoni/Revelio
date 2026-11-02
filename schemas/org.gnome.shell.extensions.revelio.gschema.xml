@@ -48,7 +48,7 @@
     </key>
     <key name="sounds" type="b">
       <default>true</default>
-      <summary>Play a sound when a focus session or break ends</summary>
+      <summary>Play a sound when a focus session or break ends, and ring when a task deadline passes</summary>
     </key>
     <key name="focus-minutes" type="u">
       <range min="1" max="180"/>

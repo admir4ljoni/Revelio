@@ -66,7 +66,7 @@ export default class RevelioPreferences extends ExtensionPreferences {
             spinRow('focus-minutes', 'Focus (minutes)', 1, 180, 1),
             spinRow('break-minutes', 'Short break (minutes)', 1, 60, 1),
             spinRow('long-break-minutes', 'Long break (minutes)', 1, 120, 1),
-            switchRow('sounds', 'Sound when a session ends'),
+            switchRow('sounds', 'Sounds (focus session ends, task deadlines)'),
         ]));
 
         const system = new Adw.PreferencesPage({title: 'System', icon_name: 'utilities-system-monitor-symbolic'});
