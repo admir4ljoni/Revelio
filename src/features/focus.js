@@ -14,6 +14,33 @@ const fmt = ms => {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
+// A progress ring filling clockwise from the top, with an optional tick at `tick` (0..1).
+// Also used by the Money tab.
+export function paintRing(area, progress, rgb, tick = null) {
+    const cr = area.get_context();
+    const [w, h] = area.get_surface_size();
+    const lw = Math.round(w / 18), r = (Math.min(w, h) - lw) / 2, top = -Math.PI / 2;
+    cr.setLineWidth(lw);
+    cr.setSourceRGBA(1, 1, 1, 0.1);
+    cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI);
+    cr.stroke();
+    cr.setLineCap(1); // ROUND
+    if (progress > 0) {
+        cr.setSourceRGBA(...rgb, 1);
+        cr.arc(w / 2, h / 2, r, top, top + Math.min(progress, 1) * 2 * Math.PI);
+        cr.stroke();
+    }
+    if (tick !== null) {
+        const a = top + tick * 2 * Math.PI, x = Math.cos(a), y = Math.sin(a);
+        cr.setLineWidth(Math.max(2, lw / 3));
+        cr.setSourceRGBA(1, 1, 1, 0.85);
+        cr.moveTo(w / 2 + x * (r - lw), h / 2 + y * (r - lw)); // from inside the ring to the edge
+        cr.lineTo(w / 2 + x * (r + lw / 2), h / 2 + y * (r + lw / 2));
+        cr.stroke();
+    }
+    cr.$dispose();
+}
+
 export class Focus {
     constructor(island, settings) {
         this._island = island;
@@ -27,7 +54,7 @@ export class Focus {
 
         // Left: countdown inside a progress ring. Right: phase chips, buttons, today's sessions.
         this._ring = new St.DrawingArea({style_class: 'revelio-focus-ring'});
-        this._ring.connect('repaint', area => this._paintRing(area));
+        this._ring.connect('repaint', area => paintRing(area, this._progress, RING[this._state.phase]));
         this._phase = new St.Label({style_class: 'revelio-focus-phase', x_align: Clutter.ActorAlign.CENTER});
         this._time = new St.Label({style_class: 'revelio-focus-time', x_align: Clutter.ActorAlign.CENTER});
         const inner = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
@@ -153,23 +180,6 @@ export class Focus {
             GLib.source_remove(this._tickId);
             this._tickId = 0;
         }
-    }
-
-    _paintRing(area) {
-        const cr = area.get_context();
-        const [w, h] = area.get_surface_size();
-        const lw = Math.round(w / 18), r = (Math.min(w, h) - lw) / 2;
-        cr.setLineWidth(lw);
-        cr.setSourceRGBA(1, 1, 1, 0.1);
-        cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI);
-        cr.stroke();
-        if (this._progress > 0) {
-            cr.setLineCap(1); // ROUND
-            cr.setSourceRGBA(...RING[this._state.phase], 1);
-            cr.arc(w / 2, h / 2, r, -Math.PI / 2, -Math.PI / 2 + this._progress * 2 * Math.PI);
-            cr.stroke();
-        }
-        cr.$dispose();
     }
 
     destroy() {
