@@ -356,15 +356,21 @@
 
 /* Money page: ring | today's allowance, month, wallets, tip | recent entries */
 .revelio-money-page { padding: 2px 22px 14px 22px; spacing: 10px; }
-.revelio-money-overview { spacing: 20px; }
-.revelio-money-ring { width: 118px; height: 118px; }
-.revelio-money-ring-value { font-size: 20pt; font-weight: 800; font-feature-settings: "tnum"; }
+.revelio-money-overview { spacing: 18px; }
+.revelio-money-rings { spacing: 4px; }
+.revelio-money-ring-button { border-radius: 16px; padding: 6px 6px 4px 6px; }
+.revelio-money-ring-button:hover, .revelio-money-ring-button:checked { background-color: rgba(255, 255, 255, 0.07); }
+.revelio-money-dial { spacing: 4px; }
+.revelio-money-ring { width: 86px; height: 86px; }
+.revelio-money-ring-value { font-size: 14pt; font-weight: 800; font-feature-settings: "tnum"; }
+.revelio-money-ring-name { font-size: 8.5pt; color: #999; font-weight: bold; }
+.revelio-money-ring-button:checked .revelio-money-ring-name { color: #fff; }
+.revelio-money-history { spacing: 6px; }
 .revelio-money-middle { spacing: 2px; }
 .revelio-money-big { font-size: 22pt; font-weight: 800; font-feature-settings: "tnum"; }
 .revelio-money-big:negative { color: #ff6b6b; }
 .revelio-money-line { font-size: 9pt; font-feature-settings: "tnum"; }
 .revelio-money-tip { font-size: 8.5pt; color: #ffb470; padding-top: 6px; }
-.revelio-money-recent { width: 210px; }
 .revelio-money-row { padding: 2px 4px 2px 8px; spacing: 6px; }
 .revelio-money-what { font-size: 9pt; font-weight: bold; }
 .revelio-money-amount { font-size: 9pt; font-weight: bold; font-feature-settings: "tnum"; }

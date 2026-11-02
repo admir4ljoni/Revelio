@@ -1,7 +1,7 @@
 // Money: a monthly budget on one page. Add money (cash or e-wallet), log spending ("25k lunch #food";
 // Untracked for money that went missing), and move money between wallets, each on any past day.
-// The ring shows how much of the month's money is spent, with a tick for how much of the month has
-// gone. Stored in ~/.local/share/revelio@midra/money.json. Logic lives in lib/money.js.
+// Three rings: the month's money (Total), Cash and E-wallet, each showing the share spent with a tick
+// for how much of the month has gone; the panel beside them details the last one hovered or clicked. Stored in ~/.local/share/revelio@midra/money.json. Logic lives in lib/money.js.
 // Report writes ~/Documents/Revelio/Money.xlsx (a sheet per month, rebuilt each time) and opens it.
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -55,6 +55,9 @@ export class Money {
             actions.add_child(b);
         }
         actions.add_child(new St.Widget({x_expand: true}));
+        const history = pill('view-list-bullet-symbolic', 'History');
+        history.connect('clicked', () => this._show('history'));
+        actions.add_child(history);
         this._reportButton = pill('x-office-spreadsheet-symbolic', 'Report');
         this._reportButton.connect('clicked', () => this._report());
         actions.add_child(this._reportButton);
@@ -64,8 +67,9 @@ export class Money {
         this.page.add_child(actions);
         this._overview = this._buildOverview();
         this._formBox = this._buildForm();
-        this.page.add_child(this._overview);
-        this.page.add_child(this._formBox);
+        this._historyBox = this._buildHistory();
+        for (const a of [this._overview, this._formBox, this._historyBox])
+            this.page.add_child(a);
         // Recompute when shown: the day (and so the allowance and pace) may have changed. No timers.
         this.page.connect('notify::mapped', () => this.page.mapped && this._render());
         island.addPage(this.page, 'Money', 'accessories-calculator-symbolic');
@@ -73,41 +77,61 @@ export class Money {
     }
 
     _buildOverview() {
-        // Left: the ring. Middle: today's allowance, the month, wallets, a tip. Right: recent entries.
-        this._ring = new St.DrawingArea({style_class: 'revelio-money-ring'});
-        this._ring.connect('repaint', area => paintRing(area, this._used ?? 0, RING[this._state], this._pace));
-        this._ringValue = new St.Label({style_class: 'revelio-money-ring-value', x_align: Clutter.ActorAlign.CENTER});
-        this._ringCaption = new St.Label({style_class: 'revelio-focus-phase', x_align: Clutter.ActorAlign.CENTER});
-        const inner = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
-            x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
-        inner.add_child(this._ringValue);
-        inner.add_child(this._ringCaption);
-        const dial = new St.Widget({layout_manager: new Clutter.BinLayout(), y_align: Clutter.ActorAlign.CENTER});
-        dial.add_child(this._ring);
-        dial.add_child(inner);
+        // Left: three rings (Total, Cash, E-wallet). Right: details of the selected one, which is
+        // the last ring hovered or clicked (it stays put when the pointer leaves).
+        const rings = new St.BoxLayout({style_class: 'revelio-money-rings', y_align: Clutter.ActorAlign.CENTER});
+        this._rings = {};
+        for (const [key, name] of [['total', 'Total'], ['cash', 'Cash'], ['ewallet', 'E-wallet']]) {
+            const r = {key, used: 0, pace: null, state: 'ok'};
+            r.area = new St.DrawingArea({style_class: 'revelio-money-ring'});
+            r.area.connect('repaint', area => paintRing(area, r.used, RING[r.state], r.pace));
+            r.value = new St.Label({style_class: 'revelio-money-ring-value', x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER});
+            const dial = new St.Widget({layout_manager: new Clutter.BinLayout()});
+            dial.add_child(r.area);
+            dial.add_child(r.value);
+            const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-money-dial'});
+            box.add_child(dial);
+            box.add_child(new St.Label({style_class: 'revelio-money-ring-name', text: name, x_align: Clutter.ActorAlign.CENTER}));
+            r.button = new St.Button({style_class: 'revelio-money-ring-button', can_focus: true, child: box});
+            r.button.connect('clicked', () => this._select(key));
+            r.button.connect('notify::hover', () => r.button.hover && this._select(key));
+            this._rings[key] = r;
+            rings.add_child(r.button);
+        }
+        this._selected = 'total';
 
-        this._todayLeft = new St.Label({style_class: 'revelio-money-big'});
-        this._monthLine = new St.Label({style_class: 'revelio-money-line'});
-        this._wallets = new St.Label({style_class: 'revelio-money-line revelio-dim'});
+        this._caption = new St.Label({style_class: 'revelio-caption'});
+        this._big = new St.Label({style_class: 'revelio-money-big'});
+        this._line1 = new St.Label({style_class: 'revelio-money-line'});
+        this._line2 = new St.Label({style_class: 'revelio-money-line revelio-dim'});
         this._tip = new St.Label({style_class: 'revelio-money-tip'});
         this._tip.clutter_text.line_wrap = true;
-        const middle = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true,
+        const panel = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true,
             y_align: Clutter.ActorAlign.CENTER, style_class: 'revelio-money-middle'});
-        middle.add_child(new St.Label({style_class: 'revelio-caption', text: 'LEFT FOR TODAY'}));
-        for (const a of [this._todayLeft, this._monthLine, this._wallets, this._tip])
-            middle.add_child(a);
+        for (const a of [this._caption, this._big, this._line1, this._line2, this._tip])
+            panel.add_child(a);
 
+        const box = new St.BoxLayout({style_class: 'revelio-money-overview', x_expand: true, y_expand: true});
+        box.add_child(rings);
+        box.add_child(panel);
+        return box;
+    }
+
+    _buildHistory() {
         this._list = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         const scroll = new St.ScrollView({y_expand: true, hscrollbar_policy: St.PolicyType.NEVER,
             vscrollbar_policy: St.PolicyType.AUTOMATIC, child: this._list});
-        const recent = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-money-recent'});
-        recent.add_child(new St.Label({style_class: 'revelio-caption', text: 'RECENT'}));
-        recent.add_child(scroll);
-
-        const box = new St.BoxLayout({style_class: 'revelio-money-overview', x_expand: true, y_expand: true});
-        box.add_child(dial);
-        box.add_child(middle);
-        box.add_child(recent);
+        const back = new St.Button({style_class: 'revelio-pill revelio-pill-small', can_focus: true, label: 'Back'});
+        back.connect('clicked', () => this._show('overview'));
+        const head = new St.BoxLayout({style_class: 'revelio-row'});
+        head.add_child(new St.Label({style_class: 'revelio-section-title', text: 'History', x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER}));
+        head.add_child(back);
+        const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-money-history',
+            x_expand: true, y_expand: true, visible: false});
+        box.add_child(head);
+        box.add_child(scroll);
         return box;
     }
 
@@ -169,18 +193,29 @@ export class Money {
         this._formTitle.text = FORMS[form].title;
         this._saveButton.label = FORMS[form].save;
         this._formHint.text = '';
-        this._overview.hide();
-        this._actions.hide();
-        this._formBox.show();
+        this._show('form');
         this._syncForm();
         this._island.grabKeys(this._entry.clutter_text);
     }
 
     _closeForm() {
-        this._form = null;
-        this._formBox.hide();
-        this._overview.show();
-        this._actions.show();
+        this._show('overview');
+    }
+
+    // One view at a time in the page: 'overview' (with the actions), 'form' or 'history'.
+    _show(view) {
+        if (view !== 'form')
+            this._form = null;
+        this._actions.visible = this._overview.visible = view === 'overview';
+        this._formBox.visible = view === 'form';
+        this._historyBox.visible = view === 'history';
+        this._render();
+    }
+
+    _select(key) {
+        if (this._selected === key)
+            return;
+        this._selected = key;
         this._render();
     }
 
@@ -291,33 +326,62 @@ export class Money {
     _render() {
         if (this._form)
             return;
-        const date = M.iso(new Date());
-        const t = M.today(this._entries, date);
-        this._pace = t.pace;
-        this._used = t.used ?? (t.spent ? 1 : 0);
-        const over = t.left < 0 || (t.spent > 0 && (t.used ?? 1) >= 1);
-        this._state = over ? 'over' : (t.paceUsed ?? 0) > t.pace + 0.1 ? 'ahead' : 'ok';
-        this._ringValue.text = t.used === null ? '—' : M.pct(t.used);
-        this._ringCaption.text = t.used === null ? 'no budget' : 'spent';
-        this._ring.queue_repaint();
+        const date = M.iso(new Date()), t = M.today(this._entries, date);
+        const monthName = M.monthName(t.month).split(' ')[0];
+        const total = this._rings.total;
+        total.used = t.used ?? (t.spent ? 1 : 0);
+        total.pace = t.pace;
+        total.state = t.left < 0 || (t.spent > 0 && (t.used ?? 1) >= 1) ? 'over'
+            : (t.paceUsed ?? 0) > t.pace + 0.1 ? 'ahead' : 'ok';
+        total.value.text = t.used === null ? '—' : M.pct(t.used);
+        const wallets = {};
+        for (const key of Object.keys(M.WALLETS)) {
+            const w = wallets[key] = M.walletMonth(this._entries, key, date), r = this._rings[key];
+            r.used = w.used ?? (w.spent ? 1 : 0);
+            r.pace = w.pace;
+            r.state = w.left < 0 ? 'over' : 'ok';
+            r.value.text = w.used === null ? '—' : M.pct(w.used);
+        }
+        for (const r of Object.values(this._rings)) {
+            r.area.queue_repaint();
+            if (r.key === this._selected)
+                r.button.add_style_pseudo_class('checked');
+            else
+                r.button.remove_style_pseudo_class('checked');
+        }
 
-        this._todayLeft.text = M.idr(t.todayLeft);
-        if (t.todayLeft < 0)
-            this._todayLeft.add_style_pseudo_class('negative');
-        else
-            this._todayLeft.remove_style_pseudo_class('negative');
-        this._monthLine.text = `${M.idr(t.left)} of ${M.idr(t.budget)} left in ${M.monthName(t.month).split(' ')[0]}`;
-        const b = M.balances(this._entries);
-        this._wallets.text = `Cash ${M.idr(b.cash)}  ·  E-wallet ${M.idr(b.ewallet)}`;
-        this._tip.text = M.tips(this._entries, date).join('\n');
+        if (this._selected === 'total') {
+            this._caption.text = 'LEFT FOR TODAY';
+            this._setBig(t.todayLeft);
+            this._line1.text = `${M.idr(t.left)} of ${M.idr(t.budget)} left in ${monthName}`;
+            this._line2.text = `Spent ${M.idr(t.spent)} · ${t.used === null ? 'no money added yet' : `${M.pct(t.used)} of the month’s money`}`;
+            this._tip.text = M.tips(this._entries, date).join('\n');
+        } else {
+            const w = wallets[this._selected];
+            this._caption.text = `${M.WALLETS[w.wallet].toUpperCase()} · LEFT`;
+            this._setBig(w.left);
+            this._line1.text = `Spent ${M.idr(w.spent)} from ${M.WALLETS[w.wallet].toLowerCase()} in ${monthName}`;
+            this._line2.text = w.left > 0 ? `About ${M.idr(w.perDay)} a day for the rest of ${monthName}` : '';
+            this._tip.text = w.left < 0 ? 'Below zero: some money going in wasn’t logged, or a spend went to the wrong wallet.' : '';
+        }
 
         this._reportButton.reactive = this._entries.length > 0;
+        if (!this._historyBox.visible)
+            return;
         this._list.destroy_all_children();
-        const recent = this._entries.map((e, i) => [e, i]).sort((a, b) => b[0].date.localeCompare(a[0].date) || b[1] - a[1]).slice(0, 30);
+        const recent = this._entries.map((e, i) => [e, i]).sort((a, b) => b[0].date.localeCompare(a[0].date) || b[1] - a[1]).slice(0, 100);
         if (!recent.length)
             this._list.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: 'Nothing logged yet'}));
         for (const [e] of recent)
             this._list.add_child(this._row(e, date));
+    }
+
+    _setBig(amount) {
+        this._big.text = M.idr(amount);
+        if (amount < 0)
+            this._big.add_style_pseudo_class('negative');
+        else
+            this._big.remove_style_pseudo_class('negative');
     }
 
     _row(e, date) {
