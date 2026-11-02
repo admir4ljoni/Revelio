@@ -15,6 +15,8 @@ import {accent} from '../lib/color.js';
 const PREFIX = 'org.mpris.MediaPlayer2.';
 const PATH = '/org/mpris/MediaPlayer2';
 const IFACE = 'org.mpris.MediaPlayer2.Player';
+// Never shown: WhatsApp by bus name (desktop apps), page URL, or WhatsApp Web's tab title ("(87) WhatsApp").
+const ignored = (app, m) => /whatsapp|zapzap/i.test(`${app} ${m.url}`) || /^(\(\d+\) )?WhatsApp$/.test(m.title);
 // The Shell's bundled MPRIS XML lacks Position/SetPosition/Seeked, so carry our own.
 const PlayerProxy = Gio.DBusProxy.makeProxyWrapper(`<node><interface name="${IFACE}">
   <method name="PlayPause"/><method name="Next"/><method name="Previous"/>
@@ -209,9 +211,13 @@ export class Music {
             this._choose();
     }
 
-    // The playing player wins, else the one that played most recently. Ignore players without a track.
+    // The playing player wins, else the one that played most recently. Ignore players without a track,
+    // and WhatsApp (web tab or desktop app): its voice notes and calls aren't music.
     _choose() {
-        const live = [...this._players.values()].filter(e => e.proxy && this._meta(e.proxy).title);
+        const live = [...this._players.values()].filter(e => {
+            const m = e.proxy && this._meta(e.proxy);
+            return m?.title && !ignored(e.app, m);
+        });
         const rank = e => (e.proxy.PlaybackStatus === 'Playing' ? 1e15 : 0) + e.stamp;
         const best = live.sort((a, b) => rank(b) - rank(a))[0] ?? null;
         const changed = best !== this._player;
@@ -247,6 +253,7 @@ export class Music {
             artUrl: get('mpris:artUrl') ?? '',
             length: Number(get('mpris:length') ?? 0),
             trackId: String(get('mpris:trackid') ?? '/'),
+            url: typeof get('xesam:url') === 'string' ? get('xesam:url') : '',
         };
     }
 
