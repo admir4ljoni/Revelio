@@ -76,4 +76,15 @@ eq(M.tips(food, '2026-11-15'), ['Food is 75% of your day-to-day spending (25% la
 const slow = [{kind: 'in', amount: 3000000, wallet: 'cash', date: '2026-11-01'},
     {kind: 'out', amount: 100000, wallet: 'cash', date: '2026-11-10', category: 'food'}];
 eq(M.tips(slow, '2026-11-10'), ['On track: about Rp 2.700.000 left at the end of the month.']);
+// Report: one sheet per month, newest first; regenerating rebuilds the same sheets (no duplicates).
+const sheets = M.reportSheets(e, new Date(2026, 10, 2, 9, 5));
+eq(sheets.map(x => x.name), ['Nov 2026', 'Oct 2026']);
+eq(M.reportSheets(e, new Date()).map(x => x.name), ['Nov 2026', 'Oct 2026']);
+const cell = (sheet, ref) => sheet.cells.find(c => c[0] === ref)?.[1];
+eq([cell(sheets[0], 'A1'), cell(sheets[0], 'A5'), cell(sheets[0], 'B5'), cell(sheets[0], 'E5')], ['November 2026', 5000000, -100000, 4500000]);
+eq(sheets[0].charts.map(c => c.type), ['doughnut', 'line']);
+eq(sheets[0].charts[1].series[0].values.slice(0, 3), [60000, 400000, null]); // spent so far, blank after today
+eq(sheets[0].cells.filter(c => /^B\d+$/.test(c[0]) && c[1] === 'Spent').length, 3);
+eq(sheets[0].cells.some(c => c[1] === 'Salary'), false); // the 28 Oct salary (no note here) is listed under November
+eq(sheets[0].cells.filter(c => c[1] === 'Income').length, 2); // KPI caption + the salary row
 print('money: ok');

@@ -107,10 +107,11 @@ function sheetXml(sheet, styles, first) {
     }).join('');
     const cols = (sheet.cols ?? []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
     const merges = sheet.merges?.length ? `<mergeCells count="${sheet.merges.length}">${sheet.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
-    return `${XML}<worksheet xmlns="${NS.main}" xmlns:r="${NS.r}">` +
+    return `${XML}<worksheet xmlns="${NS.main}" xmlns:r="${NS.r}"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>` +
         `<sheetViews><sheetView workbookViewId="0" showGridLines="0"${first ? ' tabSelected="1"' : ''}/></sheetViews>` +
         `<sheetFormatPr defaultRowHeight="16"/>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${data}</sheetData>${merges}` +
         '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>' +
+        '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>' + // A4, one page wide
         `${sheet.charts?.length ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
 }
 
@@ -135,7 +136,10 @@ function chartXml(ch) {
         const s = ch.series[0];
         const points = ch.cats.values.map((_v, i) => `<c:dPt><c:idx val="${i}"/><c:bubble3D val="0"/><c:spPr>${solid(ch.colors[i % ch.colors.length])}` +
             `<a:ln w="19050">${solid('FFFFFF')}</a:ln></c:spPr></c:dPt>`).join('');
-        const labels = `<c:dLbls><c:numFmt formatCode="0%" sourceLinked="0"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>${text(9, 'FFFFFF', true)}` +
+        // Slices under 5% get no label: they'd overlap their neighbours (the legend still names them).
+        const total = s.values.reduce((n, v) => n + (v ?? 0), 0);
+        const hidden = s.values.map((v, i) => ((v ?? 0) < 0.05 * total ? `<c:dLbl><c:idx val="${i}"/><c:delete val="1"/></c:dLbl>` : '')).join('');
+        const labels = `<c:dLbls>${hidden}<c:numFmt formatCode="0%" sourceLinked="0"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>${text(9, 'FFFFFF', true)}` +
             '<c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="1"/>' +
             '<c:showBubbleSize val="0"/><c:showLeaderLines val="0"/></c:dLbls>';
         plot = `<c:doughnutChart><c:varyColors val="1"/>${ser(s, 0, `${points}${labels}<c:cat>${strRef(ch.cats.ref, ch.cats.values)}</c:cat>` +

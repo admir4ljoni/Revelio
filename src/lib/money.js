@@ -151,3 +151,136 @@ export function tips(entries, date) {
     }
     return out.slice(0, 2);
 }
+
+// --- Excel report: one sheet per month, newest first, rebuilt from all entries each time ---
+
+// Categorical slots (validated palette order), fixed per category so a colour always means the same
+// thing; untracked is neutral grey, custom tags share the last slot.
+const SLOTS = ['2A78D6', 'EB6834', '1BAF7A', 'EDA100', 'E87BA4', '008300', '6250D6', 'E34948'];
+const catColor = tag => (tag === 'untracked' ? '8C959F' : SLOTS[PRESETS.includes(tag) ? PRESETS.indexOf(tag) : 7]);
+const INK = '1F2328', MUTED = '57606A', CARD = 'F6F8FA', HEAD = '24292F', BAND = 'F6F8FA';
+// Rupiah (Indonesian currency code 421). Thousands separators follow the viewer's locale.
+const MONEY = '[$Rp-421] #,##0;-[$Rp-421] #,##0';
+const serial = date => {
+    const [y, m, d] = date.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) / 864e5 + 25569; // days since 1899-12-30
+};
+const KIND = {in: 'Income', out: 'Spent', move: 'Move'};
+
+export function reportMonths(entries) {
+    return [...new Set(entries.map(monthOf))].sort().reverse();
+}
+
+export function reportSheet(entries, month, now) {
+    const s = summary(entries, month), name = monthName(month, true), q = `'${name}'`;
+    const end = `${month}-${pad(daysIn(month))}`, b = balances(entries, end);
+    const cells = [], put = (ref, v, st) => cells.push([ref, v, st]);
+    const cap = {size: 9, color: MUTED, fill: CARD, indent: 1};
+    const value = {size: 14, bold: true, color: INK, fill: CARD, fmt: MONEY, indent: 1, align: 'left'};
+    const head = {bold: true, color: 'FFFFFF', fill: HEAD, indent: 1};
+    const headNum = {...head, align: 'right'};
+    const section = {bold: true, size: 12, color: INK, border: 'bottom'};
+
+    put('A1', monthName(month), {bold: true, size: 20, color: INK});
+    put('A2', `Money report · generated ${now.getDate()} ${MONTHS[now.getMonth()].slice(0, 3)} ${now.getFullYear()}, ` +
+        `${pad(now.getHours())}:${pad(now.getMinutes())}`, {size: 9, color: MUTED});
+    const kpis = [['Income', s.income], ['Carried over', s.carry], ['Total to spend', s.budget], ['Spent', s.spent],
+        ['Left', s.left], ['Used', s.used ?? 0]];
+    kpis.forEach(([text, v], i) => {
+        const col = 'ABCDEF'[i];
+        put(`${col}4`, text, cap);
+        put(`${col}5`, v, text === 'Used' ? {...value, fmt: '0%'}
+            : text === 'Left' ? {...value, color: s.left < 0 ? 'B42318' : '1A7F37'} : value);
+    });
+    [['Cash at month end', b.cash], ['E-wallet at month end', b.ewallet], ['Fixed costs', s.fixed], ['Day-to-day', s.spent - s.fixed]]
+        .forEach(([text, v], i) => {
+            put(`${'ABCD'[i]}7`, text, cap);
+            put(`${'ABCD'[i]}8`, v, {...value, size: 12});
+        });
+
+    // Spending by category (feeds the doughnut).
+    let r = 10;
+    put(`A${r}`, 'Spending by category', section);
+    put(`B${r}`, '', section);
+    put(`C${r}`, '', section);
+    r++;
+    ['Category', 'Amount', 'Share'].forEach((h, i) => put(`${'ABC'[i]}${r}`, h, i ? headNum : head));
+    const catStart = r + 1;
+    for (const [i, c] of s.categories.entries()) {
+        r++;
+        const fill = i % 2 ? BAND : undefined;
+        put(`A${r}`, label(c.tag), {indent: 1, fill});
+        put(`B${r}`, c.amount, {fmt: MONEY, fill});
+        put(`C${r}`, c.amount / s.spent, {fmt: '0%', fill, color: MUTED});
+    }
+    const catEnd = r;
+    r++;
+    put(`A${r}`, 'Total', {bold: true, border: 'top', indent: 1});
+    put(`B${r}`, s.spent, {bold: true, border: 'top', fmt: MONEY});
+    put(`C${r}`, s.spent ? 1 : 0, {bold: true, border: 'top', fmt: '0%'});
+
+    // Every entry of the month, oldest first.
+    r += 3;
+    put(`A${r}`, 'All entries', section);
+    'BCDEF'.split('').forEach(col => put(`${col}${r}`, '', section));
+    r++;
+    ['Date', 'Type', 'Category', 'Wallet', 'Amount', 'Note'].forEach((h, i) => put(`${'ABCDEF'[i]}${r}`, h, i === 4 ? headNum : i === 5 ? {...head, indent: 2} : head));
+    const list = entries.filter(e => monthOf(e) === month).sort((x, y) => x.date.localeCompare(y.date));
+    for (const [i, e] of list.entries()) {
+        r++;
+        const fill = i % 2 ? BAND : undefined;
+        const color = {in: '1A7F37', out: 'B42318', move: MUTED}[e.kind];
+        put(`A${r}`, serial(e.date), {fmt: 'd mmm yyyy', fill, indent: 1, align: 'left'});
+        put(`B${r}`, KIND[e.kind], {fill, color});
+        put(`C${r}`, e.kind === 'out' ? label(e.category || 'other') : '', {fill});
+        put(`D${r}`, e.kind === 'move' ? `${WALLETS[e.wallet]} → ${WALLETS[e.to]}` : WALLETS[e.wallet], {fill});
+        put(`E${r}`, e.kind === 'out' ? -e.amount : e.amount, {fmt: MONEY, fill, color, bold: true});
+        put(`F${r}`, e.note ?? '', {fill, color: MUTED, indent: 2});
+    }
+    if (!list.length)
+        put(`A${r + 1}`, 'Nothing logged', {color: MUTED, italic: true, indent: 1});
+
+    // Day by day (feeds the line chart): spent so far against an even pace through the month.
+    const days = daysIn(month), today = iso(now), dayStart = 11;
+    put('Q10', 'Day by day', section);
+    put('R10', '', section);
+    put('S10', '', section);
+    ['Day', 'Spent so far', 'Even pace'].forEach((h, i) => put(`${'QRS'[i]}11`, h, i ? headNum : {...head, align: 'center'}));
+    const spentSoFar = [], pace = [];
+    let total = 0;
+    for (let d = 1; d <= days; d++) {
+        const date = `${month}-${pad(d)}`;
+        total += list.reduce((n, e) => n + (e.kind === 'out' && e.date === date ? e.amount : 0), 0);
+        const row = dayStart + d, fill = d % 2 ? undefined : BAND;
+        spentSoFar.push(date <= today ? total : null);
+        pace.push(Math.round(s.budget * d / days));
+        put(`Q${row}`, d, {fill, align: 'center'});
+        put(`R${row}`, spentSoFar.at(-1), {fmt: MONEY, fill});
+        put(`S${row}`, pace.at(-1), {fmt: MONEY, fill, color: MUTED});
+    }
+
+    const ref = (col, a, z) => `${q}!$${col}$${a}:$${col}$${z}`;
+    const charts = [];
+    if (s.categories.length) {
+        charts.push({type: 'doughnut', title: 'Where the money went', from: 'H4', to: 'O21',
+            cats: {ref: ref('A', catStart, catEnd), values: s.categories.map(c => label(c.tag))},
+            series: [{name: 'Spent', ref: ref('B', catStart, catEnd), values: s.categories.map(c => c.amount)}],
+            colors: s.categories.map(c => catColor(c.tag))});
+    }
+    charts.push({type: 'line', title: 'Spent so far vs. even pace', from: 'H23', to: 'O40',
+        axisFormat: '[>=1000000]0.0,,"jt";[>=1000]0,"rb";0',
+        cats: {ref: ref('Q', dayStart + 1, dayStart + days), values: Array.from({length: days}, (_v, i) => String(i + 1))},
+        series: [{name: 'Spent so far', ref: ref('R', dayStart + 1, dayStart + days), values: spentSoFar, color: SLOTS[0]},
+            {name: 'Even pace', ref: ref('S', dayStart + 1, dayStart + days), values: pace, color: '8C959F', dash: true}]});
+
+    return {
+        name, cells, charts,
+        cols: [18, 17, 17, 20, 17, 30, 3, 9, 9, 9, 9, 9, 9, 9, 9, 3, 7, 15, 15],
+        heights: {1: 34, 2: 16, 4: 18, 5: 28, 7: 18, 8: 24},
+        merges: ['A1:F1', 'A2:F2'],
+    };
+}
+
+
+// All months, newest first (so the workbook opens on the latest).
+export const reportSheets = (entries, now) => reportMonths(entries).map(m => reportSheet(entries, m, now));
