@@ -52,6 +52,7 @@ export class Music {
         this._artUrl = null;
         this._artCache = new Map(); // url -> GLib.Bytes, insertion order = age
         this._bars = []; // [actor, ms]
+        this._beating = new Set(); // bars with a running beat
         this._lyrics = new Lyrics(this._soup);
         this._lyrics.page.connectObject('notify::mapped', () => this._syncTick(true), this);
 
@@ -433,16 +434,24 @@ export class Music {
         }));
     }
 
+    // Players (browsers especially) send property changes several times a second; restarting a beat
+    // each time froze the bars near full height, so a running beat is left alone.
     _syncBar(bar, ms) {
+        const beat = !!this._player && this._playing && bar.mapped;
+        if (beat && this._beating.has(bar))
+            return;
         bar.remove_all_transitions();
+        this._beating.delete(bar);
         if (!bar.mapped) {
             bar.scale_y = BAR_IDLE;
             return;
         }
-        if (!this._player || !this._playing) {
+        if (!beat) {
             bar.ease({scale_y: BAR_IDLE, duration: 400, mode: Clutter.AnimationMode.EASE_OUT_QUAD}); // settle, don't snap
             return;
         }
+        this._beating.add(bar);
+        bar.scale_y = BAR_IDLE; // the autoReversed range is from here to 1, so always start low
         bar.ease(/** @type {any} */ ({
             scale_y: 1,
             duration: ms,
