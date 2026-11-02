@@ -193,6 +193,15 @@
 }
 .revelio-empty { padding-top: 24px; }
 .revelio-pill-small { padding: 4px 12px; font-size: 9pt; }
+.revelio-pill-small StIcon { icon-size: 13px; }
+.revelio-chip { padding: 3px 10px; font-size: 9pt; }
+.revelio-tag {
+    color: #78aeed;
+    background-color: rgba(120, 174, 237, 0.14);
+    border-radius: 99px;
+    padding: 1px 8px;
+    font-size: 8pt;
+}
 
 /* Today page */
 .revelio-today-page {

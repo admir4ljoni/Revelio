@@ -166,6 +166,10 @@ export class Island {
             this._showPage(tab);
     }
 
+    close() {
+        this._setExpanded(false);
+    }
+
     // Typing into the island (an entry): Wayland keys go to the focused window unless the Shell
     // takes a modal grab. Held until the island closes (pointer leaves, click outside, Escape).
     grabKeys(actor) {

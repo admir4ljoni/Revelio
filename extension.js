@@ -34,7 +34,7 @@ export default class RevelioExtension extends Extension {
         const volume = new VolumePopup(this._popups), battery = new BatteryPopup(this._popups);
         this._popupFeatures = [volume, battery, new HeadphonesPopup(this._popups)];
         this._island.setStatus(volume.icon, battery.icon);
-        this._tabs = [new Focus(this._island, this._settings), new Tasks(this._island),
+        this._tabs = [new Focus(this._island, this._settings), new Tasks(this._island, this.path),
             new Today(this._island, this._settings), new Shelf(this._island),
             new System(this._island, this._settings, battery)];
         this._addons = {};
