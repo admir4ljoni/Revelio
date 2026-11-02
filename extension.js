@@ -10,6 +10,7 @@ import {HeadphonesPopup} from './src/features/headphones.js';
 import {Focus} from './src/features/focus.js';
 import {Tasks} from './src/features/tasks.js';
 import {Today} from './src/features/today.js';
+import {Money} from './src/features/money.js';
 import {Shelf} from './src/features/shelf.js';
 import {System} from './src/features/system.js';
 import {Notifications} from './src/features/notifications.js';
@@ -35,7 +36,7 @@ export default class RevelioExtension extends Extension {
         this._popupFeatures = [volume, battery, new HeadphonesPopup(this._popups)];
         this._island.setStatus(volume.icon, battery.icon);
         this._tabs = [new Focus(this._island, this._settings), new Tasks(this._island, this.path),
-            new Today(this._island, this._settings), new Shelf(this._island),
+            new Money(this._island), new Today(this._island, this._settings), new Shelf(this._island),
             new System(this._island, this._settings, battery)];
         this._addons = {};
         for (const key of Object.keys(ADDONS))
