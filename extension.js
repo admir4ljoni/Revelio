@@ -76,6 +76,9 @@ export default class RevelioExtension extends Extension {
     }
 
     disable() {
+        // Unmap every page first: removing a tab shows its neighbour, and a mapped page starts
+        // its timers (System) or sources (Today) after its owner has already been torn down.
+        this._island.actor.hide();
         this._cancellable.cancel();
         this._displayConfig?.disconnectObject(this);
         this._displayConfig = null;
