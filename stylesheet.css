@@ -207,7 +207,7 @@
     font-feature-settings: "tnum";
 }
 .revelio-today-month { color: #ccc; }
-.revelio-caption { color: #777; font-size: 8pt; font-weight: bold; padding-bottom: 6px; }
+.revelio-caption { color: #777; font-size: 8pt; font-weight: bold; padding-bottom: 4px; }
 .revelio-today-right { padding-top: 6px; }
 .revelio-today-events { spacing: 6px; }
 .revelio-event {
@@ -269,12 +269,31 @@
 .revelio-head-time { font-weight: bold; font-feature-settings: "tnum"; }
 
 /* System and Power pages */
-.revelio-system-page { padding: 8px 16px; spacing: 12px; }
-.revelio-system-right { spacing: 2px; width: 130px; }
-.revelio-stat { font-size: 8.5pt; font-feature-settings: "tnum"; }
-.revelio-graph { width: 130px; height: 44px; }
+.revelio-system-page { padding: 0 22px 18px 22px; spacing: 10px; }
+.revelio-cards { spacing: 8px; }
+.revelio-card {
+    padding: 6px 11px 8px 11px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.07);
+    spacing: 1px;
+}
+.revelio-card-caption { color: #999; font-size: 8.5pt; }
+.revelio-card-value { font-weight: bold; font-size: 11pt; font-feature-settings: "tnum"; }
+.revelio-card-track { height: 3px; border-radius: 2px; background-color: rgba(255, 255, 255, 0.1); margin-top: 4px; }
+.revelio-card-fill { height: 3px; border-radius: 2px; background-color: #78aeed; }
+.revelio-sys-bottom { spacing: 22px; }
+.revelio-sys-details { width: 190px; }
+.revelio-sys-graph { width: 200px; }
+.revelio-sys-apps { min-width: 150px; }
+.revelio-sys-col { spacing: 0; }
+.revelio-kv { spacing: 12px; }
+.revelio-kv-key { color: #bbb; font-size: 8.5pt; }
+.revelio-kv-value { font-size: 8.5pt; font-feature-settings: "tnum"; }
+.revelio-graph { height: 66px; }
+.revelio-power-page { spacing: 26px; padding-top: 4px; }
+.revelio-power-left { width: 150px; }
 .revelio-power-total {
-    font-size: 26pt;
+    font-size: 30pt;
     font-weight: 800;
     font-feature-settings: "tnum";
 }

@@ -3,11 +3,12 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 import * as S from '../lib/stats.js';
 
 const HISTORY = 60; // samples, one a second
-const APPS = 3;
+const APPS = 4;
 const MAX_DRIVES = 2;
 const RAPL = '/sys/class/powercap';
 const DISCHARGING = 2; // UPower State
@@ -38,6 +39,47 @@ function listDir(path) {
 
 const fmtRate = b => (b < 1000 ? `${Math.round(b)} B/s` : `${GLib.format_size(b)}/s`);
 const pct = f => `${Math.round(f * 100)}%`;
+
+// A stat card: caption, value and a level bar (the fill is scaled, so no relayout per sample).
+function card(caption) {
+    const value = new St.Label({style_class: 'revelio-card-value'});
+    const fill = new St.Widget({style_class: 'revelio-card-fill', x_expand: true, pivot_point: new Graphene.Point({x: 0, y: 0})});
+    const track = new St.Widget({style_class: 'revelio-card-track', layout_manager: new Clutter.BinLayout(), x_expand: true});
+    track.add_child(fill);
+    const box = new St.BoxLayout({style_class: 'revelio-card', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
+    box.add_child(new St.Label({style_class: 'revelio-card-caption', text: caption}));
+    box.add_child(value);
+    box.add_child(track);
+    return {box, value, set(text, level) {
+        value.text = text;
+        fill.scale_x = Math.max(0, Math.min(1, level ?? 0));
+    }};
+}
+
+// Key/value rows, rebuilt only when the number of rows changes.
+function setRows(box, rows) {
+    if (box.get_n_children() !== rows.length) {
+        box.destroy_all_children();
+        for (let i = 0; i < rows.length; i++) {
+            const row = new St.BoxLayout({style_class: 'revelio-kv'});
+            row.add_child(new St.Label({style_class: 'revelio-kv-key', x_expand: true}));
+            row.add_child(new St.Label({style_class: 'revelio-kv-value'}));
+            box.add_child(row);
+        }
+    }
+    box.get_children().forEach((row, i) => {
+        const [k, v] = /** @type {St.Label[]} */ (row.get_children());
+        [k.text, v.text] = rows[i];
+    });
+}
+
+const column = (caption, child, cls = '') => {
+    const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: `revelio-sys-col ${cls}`,
+        x_expand: cls === 'revelio-sys-apps'});
+    box.add_child(new St.Label({style_class: 'revelio-caption', text: caption}));
+    box.add_child(child);
+    return box;
+};
 const watts = w => `${w < 10 ? w.toFixed(1) : Math.round(w)} W`;
 
 // First GPU by preference (discrete NVIDIA, then AMD, then Intel). APUs report the whole SoC as PPT.
@@ -75,30 +117,39 @@ export class System {
             psys: read(`${RAPL}/${n}/name`)?.trim() === 'psys',
         }));
 
-        // System page: stats on the left, CPU history + per-core bars and top apps on the right.
-        const label = (cls = 'revelio-stat') => new St.Label({style_class: cls});
-        this._stats = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
-        this._graph = new St.DrawingArea({style_class: 'revelio-graph'});
+        // System page: stat cards on top; details, CPU history with per-core load, and top apps below.
+        this._cards = {cpu: card('CPU'), gpu: card('GPU'), mem: card('Memory'), disk: card('Drives'),
+            net: card('Network'), bat: card('Battery')};
+        this._cards.gpu.box.visible = !!this._gpu;
+        const cards = new St.BoxLayout({style_class: 'revelio-cards', x_expand: true});
+        Object.values(this._cards).forEach(c => cards.add_child(c.box));
+        this._details = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL});
+        this._graph = new St.DrawingArea({style_class: 'revelio-graph', y_expand: true});
         this._graph.connect('repaint', area => this._paintGraph(area));
-        this._apps = Array.from({length: APPS}, () => label('revelio-stat revelio-dim'));
-        const right = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER, style_class: 'revelio-system-right'});
-        right.add_child(this._graph);
-        this._apps.forEach(a => right.add_child(a));
-        this._sysPage = new St.BoxLayout({style_class: 'revelio-system-page', x_expand: true});
-        this._sysPage.add_child(this._stats);
-        this._sysPage.add_child(right);
+        this._apps = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL});
+        const bottom = new St.BoxLayout({style_class: 'revelio-sys-bottom', x_expand: true, y_expand: true});
+        bottom.add_child(column('DETAILS', this._details, 'revelio-sys-details'));
+        bottom.add_child(column('CPU HISTORY · PER CORE', this._graph, 'revelio-sys-graph'));
+        bottom.add_child(column('TOP APPS', this._apps, 'revelio-sys-apps'));
+        this._sysPage = new St.BoxLayout({style_class: 'revelio-system-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
+        this._sysPage.add_child(cards);
+        this._sysPage.add_child(bottom);
 
-        // Power page: total on the left, CPU / GPU / other on the right.
-        this._total = label('revelio-power-total');
-        const left = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        // Power page: total on the left, CPU / GPU / other cards (share of the total) on the right.
+        this._total = new St.Label({style_class: 'revelio-power-total'});
+        this._totalNote = new St.Label({style_class: 'revelio-dim revelio-small'});
+        const left = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-power-left',
+            y_align: Clutter.ActorAlign.CENTER});
+        left.add_child(new St.Label({style_class: 'revelio-caption', text: 'POWER DRAW'}));
         left.add_child(this._total);
-        left.add_child(new St.Label({style_class: 'revelio-dim', text: 'Power draw'}));
-        this._parts = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER});
-        const top = new St.BoxLayout({x_expand: true, y_expand: true});
-        top.add_child(left);
-        top.add_child(this._parts);
-        this._powerPage = new St.BoxLayout({style_class: 'revelio-system-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
-        this._powerPage.add_child(top);
+        left.add_child(this._totalNote);
+        this._parts = {cpu: card(this._gpu?.apu ? 'CPU+GPU' : 'CPU'), gpu: card('GPU'), other: card('Everything else')};
+        this._parts.gpu.box.visible = !this._gpu?.apu;
+        const parts = new St.BoxLayout({style_class: 'revelio-cards', x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        Object.values(this._parts).forEach(c => parts.add_child(c.box));
+        this._powerPage = new St.BoxLayout({style_class: 'revelio-system-page revelio-power-page', x_expand: true});
+        this._powerPage.add_child(left);
+        this._powerPage.add_child(parts);
 
         for (const page of [this._sysPage, this._powerPage])
             page.connectObject('notify::mapped', () => this._syncTimer(), this);
@@ -164,32 +215,35 @@ export class System {
             this._sampleApps(cpu[0]?.total ?? 0);
         this._sampleGpu(slow);
 
-        const lines = [`CPU ${pct(load[0] ?? 0)}`,
-            `Mem ${GLib.format_size(mem.total - mem.available)} / ${GLib.format_size(mem.total)}`];
-        for (const d of this._drives)
-            lines.push(`Disk ${d.name} ${GLib.format_size(d.used)} / ${GLib.format_size(d.size)}`);
-        lines.push(`↓ ${fmtRate(prev ? S.rate(prev.net.rx, net.rx, dt) : 0)} ↑ ${fmtRate(prev ? S.rate(prev.net.tx, net.tx, dt) : 0)}`);
+        const c = this._cards, used = mem.total - mem.available;
+        c.cpu.set(pct(load[0] ?? 0), load[0]);
+        c.mem.set(pct(mem.total ? used / mem.total : 0), mem.total ? used / mem.total : 0);
+        const d = this._drives[0];
+        c.disk.box.visible = !!d;
+        if (d)
+            c.disk.set(pct(d.used / d.size), d.used / d.size);
+        const rx = prev ? S.rate(prev.net.rx, net.rx, dt) : 0, tx = prev ? S.rate(prev.net.tx, net.tx, dt) : 0;
+        c.net.set(fmtRate(rx + tx), Math.log10(1 + rx + tx) / 8); // log scale, 100 MB/s full
         const g = this._gpuNow;
         if (this._gpu)
-            lines.push(`GPU ${g.load === null ? 'N/A' : pct(g.load)}${g.temp === null ? '' : ` · ${Math.round(g.temp)} °C`}`);
+            c.gpu.set(g.load === null ? 'N/A' : pct(g.load), g.load);
         const bat = this._battery.proxy;
+        c.bat.box.visible = !!bat?.IsPresent;
         if (bat?.IsPresent)
-            lines.push(`Bat ${Math.round(bat.Percentage)}%${bat.State === DISCHARGING ? '' : ' · plugged in'}`);
-        this._setLines(this._stats, lines);
+            c.bat.set(`${Math.round(bat.Percentage)}%`, bat.Percentage / 100);
+
+        const rows = [['Memory', `${GLib.format_size(used)} / ${GLib.format_size(mem.total)}`]];
+        for (const drive of this._drives)
+            rows.push([`Disk ${drive.name}`, `${GLib.format_size(drive.used)} / ${GLib.format_size(drive.size)}`]);
+        rows.push(['Down · Up', `${fmtRate(rx)} · ${fmtRate(tx)}`]);
+        if (this._gpu && g.temp !== null)
+            rows.push(['GPU temp', `${Math.round(g.temp)} °C`]);
+        if (bat?.IsPresent)
+            rows.push(['Battery', bat.State === DISCHARGING ? 'On battery' : 'Plugged in']);
+        setRows(this._details, rows);
         this._graph.queue_repaint();
 
         this._samplePower(prev, energy, dt, load[0] ?? 0);
-    }
-
-    _setLines(box, lines) {
-        const kids = box.get_children();
-        lines.forEach((text, i) => {
-            const l = /** @type {St.Label} */ (kids[i]) ?? new St.Label({style_class: 'revelio-stat'});
-            if (!kids[i])
-                box.add_child(l);
-            l.text = text;
-        });
-        kids.slice(lines.length).forEach(k => k.destroy());
     }
 
     _sampleApps(total) {
@@ -204,7 +258,7 @@ export class System {
         const prev = this._procs;
         this._procs = {procs, total};
         const top = prev ? S.topApps(prev.procs, procs, total - prev.total, APPS) : [];
-        this._apps.forEach((l, i) => (l.text = top[i] ? `${top[i].name} ${pct(top[i].share)}` : ''));
+        setRows(this._apps, top.length ? top.map(a => [a.name, pct(a.share)]) : [['Measuring…', '']]);
     }
 
     _sampleGpu(slow) {
@@ -277,11 +331,11 @@ export class System {
 
         const est = measured => (measured ? '' : '~');
         this._total.text = `${est(totalMeasured)}${watts(total)}`;
-        this._setLines(this._parts, [
-            `${apu ? 'CPU+GPU' : 'CPU'}  ${est(cpuMeasured)}${watts(cpu)}`,
-            ...apu ? [] : [`GPU  ${gpu === null ? 'N/A' : watts(gpu)}`],
-            `Other  ${est(totalMeasured)}${watts(other)}`,
-        ]);
+        this._totalNote.text = totalMeasured ? 'measured' : '~ estimated';
+        const share = w => (total > 0 ? w / total : 0);
+        this._parts.cpu.set(`${est(cpuMeasured)}${watts(cpu)}`, share(cpu));
+        this._parts.gpu.set(gpu === null ? 'N/A' : watts(gpu), share(gpu ?? 0));
+        this._parts.other.set(`${est(totalMeasured)}${watts(other)}`, share(other));
     }
 
     _paintGraph(area) {
@@ -298,7 +352,7 @@ export class System {
             hist.forEach((v, i) => cr.lineTo(x(i), histH * (1 - v)));
             cr.lineTo(w, histH);
             cr.closePath();
-            cr.setSourceRGBA(0.47, 0.68, 0.93, 0.85);
+            cr.setSourceRGBA(0.47, 0.68, 0.93, 0.6);
             cr.fill();
         }
         const cores = this._cores ?? [], bw = cores.length ? w / cores.length : 0;
@@ -306,7 +360,7 @@ export class System {
             cr.setSourceRGBA(1, 1, 1, 0.12);
             cr.rectangle(i * bw + 1, histH + 3, bw - 2, coreH);
             cr.fill();
-            cr.setSourceRGBA(1, 1, 1, 0.85);
+            cr.setSourceRGBA(0.47, 0.68, 0.93, 1);
             cr.rectangle(i * bw + 1, h - coreH * v, bw - 2, coreH * v);
             cr.fill();
         });
