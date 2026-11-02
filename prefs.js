@@ -77,7 +77,7 @@ export default class RevelioPreferences extends ExtensionPreferences {
 
         const addons = new Adw.PreferencesPage({title: 'Add-ons', icon_name: 'application-x-addon-symbolic'});
         addons.add(group('Add-ons', [
-            switchRow('addon-notifications', 'Notifications on the island'),
+            switchRow('addon-notifications', 'Notifications on the island, with a history tab'),
             switchRow('addon-clipboard', 'Clipboard history (in memory only)'),
             switchRow('addon-script', 'Script reader'),
             switchRow('addon-recorder', 'Screen recorder tab'),
