@@ -28,12 +28,13 @@ export class Script {
             child: content,
         });
         const button = (icon, action) => {
-            const b = new St.Button({style_class: 'revelio-media-button', can_focus: true, child: new St.Icon({icon_name: icon})});
+            const b = new St.Button({style_class: 'revelio-pill revelio-script-button', can_focus: true, child: new St.Icon({icon_name: icon})});
             b.connect('clicked', action);
             return b;
         };
         this._playButton = button('media-playback-start-symbolic', () => this._toggle());
-        const buttons = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER});
+        const buttons = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-script-buttons',
+            y_align: Clutter.ActorAlign.CENTER});
         buttons.add_child(this._playButton);
         buttons.add_child(button('media-skip-backward-symbolic', () => this._move(-Infinity)));
         buttons.add_child(button('edit-paste-symbolic', () => St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD,

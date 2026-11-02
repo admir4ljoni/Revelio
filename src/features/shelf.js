@@ -22,13 +22,21 @@ export class Shelf {
         this._uris = Array.isArray(saved) ? saved.filter(u => typeof u === 'string') : [];
 
         this._row = new St.BoxLayout({style_class: 'revelio-shelf'});
-        this.page = new St.ScrollView({
+        const scroll = new St.ScrollView({
             x_expand: true,
             y_expand: true,
             hscrollbar_policy: St.PolicyType.AUTOMATIC,
             vscrollbar_policy: St.PolicyType.NEVER,
             child: this._row,
         });
+        this._count = new St.Label({style_class: 'revelio-section-title', x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        const header = new St.BoxLayout();
+        header.add_child(this._count);
+        header.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: 'Drop files on the island to keep them here',
+            y_align: Clutter.ActorAlign.CENTER}));
+        this.page = new St.BoxLayout({style_class: 'revelio-tasks-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
+        this.page.add_child(header);
+        this.page.add_child(scroll);
         island.addPage(this.page, 'Shelf', 'folder-symbolic');
         this._render();
 
@@ -109,9 +117,16 @@ export class Shelf {
 
     _render() {
         this._row.destroy_all_children();
-        if (!this._uris.length) {
-            this._row.add_child(new St.Label({style_class: 'revelio-dim', text: 'Drop files on the island',
-                x_expand: true, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER}));
+        const n = this._uris.length;
+        this._count.text = n === 1 ? '1 file' : `${n} files`;
+        if (!n) {
+            const empty = new St.BoxLayout({style_class: 'revelio-dropzone', orientation: Clutter.Orientation.VERTICAL,
+                x_expand: true, y_expand: true});
+            empty.add_child(new St.Icon({icon_name: 'folder-download-symbolic', style_class: 'revelio-dropzone-icon',
+                x_align: Clutter.ActorAlign.CENTER, y_expand: true, y_align: Clutter.ActorAlign.END}));
+            empty.add_child(new St.Label({style_class: 'revelio-dim', text: 'Drag files here', x_align: Clutter.ActorAlign.CENTER,
+                y_expand: true, y_align: Clutter.ActorAlign.START}));
+            this._row.add_child(empty);
             return;
         }
         for (const uri of this._uris) {
@@ -129,18 +144,19 @@ export class Shelf {
                 }
             });
             const button = (icon, action) => {
-                const b = new St.Button({style_class: 'revelio-media-button', can_focus: true, child: new St.Icon({icon_name: icon})});
+                const b = new St.Button({style_class: 'revelio-row-action', can_focus: true, child: new St.Icon({icon_name: icon})});
                 b.connect('clicked', action);
                 return b;
             };
-            const actions = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER});
+            const actions = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER, style_class: 'revelio-shelf-actions'});
             actions.add_child(button('folder-open-symbolic', () => Gio.DBus.session.call('org.freedesktop.FileManager1',
                 '/org/freedesktop/FileManager1', 'org.freedesktop.FileManager1', 'ShowItems',
                 new GLib.Variant('(ass)', [[uri], '']), null, Gio.DBusCallFlags.NONE, -1, null, null)));
             actions.add_child(button('window-close-symbolic', () => this._change(this._uris.filter(u => u !== uri))));
             const label = new St.Label({style_class: 'revelio-shelf-name', text: name, x_align: Clutter.ActorAlign.CENTER});
             label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-            const item = new St.BoxLayout({style_class: 'revelio-shelf-item', orientation: Clutter.Orientation.VERTICAL});
+            const item = new St.BoxLayout({style_class: 'revelio-shelf-item revelio-list-row', orientation: Clutter.Orientation.VERTICAL,
+                reactive: true, track_hover: true});
             item.add_child(open);
             item.add_child(label);
             item.add_child(actions);
