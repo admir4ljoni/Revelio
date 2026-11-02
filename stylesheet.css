@@ -369,6 +369,9 @@
 .revelio-money-middle { spacing: 2px; }
 .revelio-money-big { font-size: 22pt; font-weight: 800; font-feature-settings: "tnum"; }
 .revelio-money-big:negative { color: #ff6b6b; }
+.revelio-money-big-box { spacing: 8px; }
+.revelio-money-eye { icon-size: 16px; color: #999; }
+.revelio-money-big-button:hover .revelio-money-eye, .revelio-money-big-button:focus .revelio-money-eye { color: #fff; }
 .revelio-money-line { font-size: 9pt; font-feature-settings: "tnum"; }
 .revelio-money-tip { font-size: 8.5pt; color: #ffb470; padding-top: 6px; }
 .revelio-money-row { padding: 2px 4px 2px 8px; spacing: 6px; }

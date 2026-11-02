@@ -55,19 +55,6 @@ export class Money {
             actions.add_child(b);
         }
         actions.add_child(new St.Widget({x_expand: true}));
-        // Eye: masks the rings and amounts until clicked again (remembered across restarts).
-        this._hidden = store.load('money-hidden', false) === true;
-        this._eye = new St.Button({style_class: 'revelio-pill revelio-pill-small', can_focus: true, child: (this._eyeIcon = new St.Icon())});
-        this._eye.connect('clicked', () => {
-            this._hidden = !this._hidden;
-            try {
-                store.save('money-hidden', this._hidden);
-            } catch (e) {
-                logError(e, 'Revelio: saving money-hidden');
-            }
-            this._render();
-        });
-        actions.add_child(this._eye);
         const history = pill('view-list-bullet-symbolic', 'History');
         history.connect('clicked', () => this._show('history'));
         actions.add_child(history);
@@ -115,14 +102,31 @@ export class Money {
         this._selected = 'total';
 
         this._caption = new St.Label({style_class: 'revelio-caption'});
-        this._big = new St.Label({style_class: 'revelio-money-big'});
+        this._big = new St.Label({style_class: 'revelio-money-big', y_align: Clutter.ActorAlign.CENTER});
+        // The amount and the eye beside it are one button: either masks the rings and amounts
+        // until clicked again (remembered across restarts).
+        this._hidden = store.load('money-hidden', false) === true;
+        this._eyeIcon = new St.Icon({style_class: 'revelio-money-eye', y_align: Clutter.ActorAlign.CENTER});
+        const bigBox = new St.BoxLayout({style_class: 'revelio-money-big-box'});
+        bigBox.add_child(this._big);
+        bigBox.add_child(this._eyeIcon);
+        this._eye = new St.Button({style_class: 'revelio-money-big-button', can_focus: true, x_align: Clutter.ActorAlign.START, child: bigBox});
+        this._eye.connect('clicked', () => {
+            this._hidden = !this._hidden;
+            try {
+                store.save('money-hidden', this._hidden);
+            } catch (e) {
+                logError(e, 'Revelio: saving money-hidden');
+            }
+            this._render();
+        });
         this._line1 = new St.Label({style_class: 'revelio-money-line'});
         this._line2 = new St.Label({style_class: 'revelio-money-line revelio-dim'});
         this._tip = new St.Label({style_class: 'revelio-money-tip'});
         this._tip.clutter_text.line_wrap = true;
         const panel = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true,
             y_align: Clutter.ActorAlign.CENTER, style_class: 'revelio-money-middle'});
-        for (const a of [this._caption, this._big, this._line1, this._line2, this._tip])
+        for (const a of [this._caption, this._eye, this._line1, this._line2, this._tip])
             panel.add_child(a);
 
         const box = new St.BoxLayout({style_class: 'revelio-money-overview', x_expand: true, y_expand: true});
