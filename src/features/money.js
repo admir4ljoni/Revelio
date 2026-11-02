@@ -2,10 +2,15 @@
 // move money between wallets, and recount what you actually hold (the gap is logged as Untracked).
 // The ring shows how much of the month's money is spent, with a tick for how much of the month has
 // gone. Stored in ~/.local/share/revelio@midra/money.json. Logic lives in lib/money.js.
+// Report writes ~/Documents/Revelio/Money.xlsx (a sheet per month, rebuilt each time) and opens it.
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as store from '../lib/store.js';
 import * as M from '../lib/money.js';
+import {workbook} from '../lib/xlsx.js';
 import {paintRing} from './focus.js';
 
 const RING = {ok: [0.47, 0.68, 0.93], ahead: [1, 0.62, 0.26], over: [0.88, 0.27, 0.27]};
@@ -50,6 +55,10 @@ export class Money {
             b.connect('clicked', () => this._openForm(form));
             actions.add_child(b);
         }
+        actions.add_child(new St.Widget({x_expand: true}));
+        this._reportButton = pill('x-office-spreadsheet-symbolic', 'Report');
+        this._reportButton.connect('clicked', () => this._report());
+        actions.add_child(this._reportButton);
         this._actions = actions;
 
         this.page = new St.BoxLayout({style_class: 'revelio-money-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
@@ -243,6 +252,27 @@ export class Money {
         this._closeForm();
     }
 
+    _report() {
+        const docs = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOCUMENTS) ?? GLib.get_home_dir();
+        const dir = GLib.build_filenamev([docs, 'Revelio']), file = Gio.File.new_for_path(GLib.build_filenamev([dir, 'Money.xlsx']));
+        try {
+            GLib.mkdir_with_parents(dir, 0o755);
+            file.replace_contents(workbook(M.reportSheets(this._entries, new Date())), null, false,
+                Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+        } catch (e) {
+            logError(e, 'Revelio: writing the money report');
+            this._tip.text = `Couldn’t save the report: ${e.message}`;
+            return;
+        }
+        this._island.close();
+        try {
+            Gio.AppInfo.launch_default_for_uri(file.get_uri(), global.create_app_launch_context(0, -1));
+        } catch (e) {
+            Main.notify('Money report saved', file.get_path()); // no app for .xlsx
+            logError(e, 'Revelio: opening the money report');
+        }
+    }
+
     _change(entries) {
         this._entries = entries;
         try {
@@ -276,6 +306,7 @@ export class Money {
         this._wallets.text = `Cash ${M.idr(b.cash)}  ·  E-wallet ${M.idr(b.ewallet)}`;
         this._tip.text = M.tips(this._entries, date).join('\n');
 
+        this._reportButton.reactive = this._entries.length > 0;
         this._list.destroy_all_children();
         const recent = this._entries.map((e, i) => [e, i]).sort((a, b) => b[0].date.localeCompare(a[0].date) || b[1] - a[1]).slice(0, 30);
         if (!recent.length)
