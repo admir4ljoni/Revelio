@@ -4,6 +4,7 @@
 // Do Not Disturb is lost. Muted apps are left out of both. History is in memory only.
 // Apps seen are listed in `notification-apps` so prefs can offer a switch for each.
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
@@ -14,12 +15,49 @@ import {ago} from '../lib/ago.js';
 const SHOW_MS = 3500;
 const MAX_ITEMS = 30;
 
+// Screenshot/screencast notifications are transient: the Shell destroys them as soon as the banner
+// hides, taking their "open the file" action along. Note the file while it's fresh so the history
+// can still open it. ponytail: reads Shell internals (source icon, screenshotUI._screencastPath,
+// the recent-files entry the Shell writes for screenshots), best effort.
+function captureUri(source, n) {
+    if (source.iconName !== 'screenshooter-symbolic')
+        return null;
+    try {
+        // Screenshots carry the image as the icon; screencasts don't (and the Shell never clears
+        // _screencastPath, so it can be stale for screenshots). No body = failed recording.
+        if (!(n.gicon instanceof St.ImageContent)) {
+            const path = Main.screenshotUI?._screencastPath;
+            return path && n.body ? Gio.File.new_for_path(path).get_uri() : null;
+        }
+        const recent = new GLib.BookmarkFile();
+        recent.load_from_file(GLib.build_filenamev([GLib.get_user_data_dir(), 'recently-used.xbel']));
+        let best = null, bestAt = -Infinity;
+        for (const uri of recent.get_uris()) {
+            const at = recent.get_added_date_time(uri).to_unix();
+            if (at > bestAt)
+                [best, bestAt] = [uri, at];
+        }
+        return best;
+    } catch {
+        return null;
+    }
+}
+
+function openUri(uri) {
+    try {
+        Gio.app_info_launch_default_for_uri(uri, global.create_app_launch_context(0, -1));
+    } catch (e) {
+        logError(e, 'Revelio: opening capture');
+    }
+    Main.overview.hide();
+}
+
 export class Notifications {
     constructor(island, popups, settings) {
         this._island = island;
         this._popups = popups;
         this._settings = settings;
-        this._items = []; // {app, title, body, gicon, at (DateTime), n (live notification or null)}
+        this._items = []; // {app, title, body, gicon, at (DateTime), n (live notification or null), uri (capture file or null)}
 
         this._list = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         const scroll = new St.ScrollView({
@@ -65,7 +103,7 @@ export class Notifications {
 
         // Snapshot the text: the notification may expire (or update) while it's in the history.
         const item = {app, title: n.title ?? '', body: n.body ?? '', gicon: n.gicon ?? source.icon ?? null,
-            at: n.datetime ?? GLib.DateTime.new_now_local(), n};
+            at: n.datetime ?? GLib.DateTime.new_now_local(), n, uri: captureUri(source, n)};
         n.connectObject('destroy', () => {
             item.n = null;
             this._render();
@@ -131,9 +169,14 @@ export class Notifications {
                 gicon: icon, fallback_icon_name: 'preferences-system-notifications-symbolic'}));
             row.add_child(textBox);
             // Clicking runs the notification's default action, while the app still has it.
-            const open = new St.Button({style_class: 'revelio-notif-open', child: row, can_focus: true, reactive: !!item.n,
+            const open = new St.Button({style_class: 'revelio-notif-open', child: row, can_focus: true, reactive: !!(item.n || item.uri),
                 x_expand: true, x_align: Clutter.ActorAlign.FILL});
-            open.connect('clicked', () => item.n?.activate());
+            open.connect('clicked', () => {
+                if (item.n)
+                    item.n.activate();
+                else if (item.uri)
+                    openUri(item.uri);
+            });
             const remove = new St.Button({style_class: 'revelio-row-action', can_focus: true, y_align: Clutter.ActorAlign.CENTER,
                 child: new St.Icon({icon_name: 'window-close-symbolic'})});
             remove.connect('clicked', () => this._change(this._items.filter(i => i !== item)));
