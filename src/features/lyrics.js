@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Pango from 'gi://Pango';
 import Soup from 'gi://Soup';
 import St from 'gi://St';
 import {parse, lineAt} from '../lib/lrc.js';
@@ -32,6 +33,9 @@ export class Lyrics {
             clip_to_allocation: true,
             y_expand: true,
             visible: false,
+            // A window onto the column: ask for no height, or the whole song stretches the music page.
+            min_height: 0,
+            natural_height: 0,
         });
         this.page.add_child(this._column);
         // Height goes 0 -> real on the first allocation after mapping; scroll then.
@@ -120,6 +124,7 @@ export class Lyrics {
         this._labels = lines.map(l => {
             const label = new St.Label({style_class: 'revelio-lyric', text: l.text || '♪'});
             label.clutter_text.line_wrap = true;
+            label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
             this._column.add_child(label);
             return label;
         });
