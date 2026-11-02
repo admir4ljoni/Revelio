@@ -1,5 +1,5 @@
 // Lyrics (3, 4): synced lyrics from LRCLIB for the music track. Owned by Music, which feeds it the
-// track and position. Shows a scrolling lyrics page plus the current line on the music page.
+// track and position and shows `page` (a scrolling column, current line highlighted) beside the player.
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -14,8 +14,7 @@ const SCROLL_MS = 300;
 const query = params => Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 
 export class Lyrics {
-    constructor(island, soup) {
-        this._island = island;
+    constructor(soup) {
         this._soup = soup;
         this._cancellable = new Gio.Cancellable();
         this._key = null;
@@ -23,20 +22,16 @@ export class Lyrics {
         this._labels = [];
         this._index = -1;
         this._timerId = 0;
-        this._shown = false;
         this._accent = null;
 
-        // Current line on the music page (4).
-        this.line = new St.Label({style_class: 'revelio-lyric-line', visible: false});
-
-        // Lyrics page (3): all lines in a column, slid so the current one sits in the middle.
+        // All lines in a column, slid so the current one sits in the middle. Hidden without lyrics.
         this._column = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.START});
         this.page = new St.Widget({
-            style_class: 'revelio-lyrics-page',
+            style_class: 'revelio-lyrics-column',
             layout_manager: new Clutter.BinLayout(),
             clip_to_allocation: true,
-            x_expand: true,
             y_expand: true,
+            visible: false,
         });
         this.page.add_child(this._column);
         // Height goes 0 -> real on the first allocation after mapping; scroll then.
@@ -82,7 +77,6 @@ export class Lyrics {
     // CSS color for the current line (from the album art), or null for the stylesheet's.
     setAccent(color) {
         this._accent = color && `color: ${color};`;
-        this.line.style = this._accent;
         if (this._labels[this._index])
             this._labels[this._index].style = this._accent;
     }
@@ -98,21 +92,20 @@ export class Lyrics {
         this._labels[i]?.add_style_pseudo_class('active');
         if (this._labels[i])
             this._labels[i].style = this._accent;
-        this.line.text = this._lines[i]?.text || '♪';
         this._scroll(true);
     }
 
     _scroll(animate) {
         const col = this._column;
         col.remove_all_transitions();
-        // Not has_allocation(): the active line's bold restyle just queued a relayout, so it's
-        // false here every line. The allocation box forces that layout and gives the real height.
+        // Not has_allocation(): the active line's restyle just queued a relayout, so it's false here
+        // every line. The allocation boxes force that layout and give real positions (lines wrap).
         const pageH = col.mapped ? this.page.get_allocation_box().get_height() : 0;
-        if (!pageH || !this._labels.length)
+        const label = this._labels[Math.max(0, this._index)];
+        if (!pageH || !label)
             return;
-        // Lines are single-line labels, so all the same height.
-        const [, lineH] = this._labels[0].get_preferred_height(-1);
-        const y = Math.round(pageH / 2 - (Math.max(0, this._index) + 0.5) * lineH);
+        const box = label.get_allocation_box();
+        const y = Math.round(pageH / 2 - (box.y1 + box.y2) / 2);
         if (animate)
             col.ease(/** @type {any} */ ({translation_y: y, duration: SCROLL_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD}));
         else
@@ -125,18 +118,12 @@ export class Lyrics {
         this._index = -1;
         this._column.destroy_all_children();
         this._labels = lines.map(l => {
-            const label = new St.Label({style_class: 'revelio-lyric', text: l.text || '♪', x_align: Clutter.ActorAlign.CENTER});
+            const label = new St.Label({style_class: 'revelio-lyric', text: l.text || '♪'});
+            label.clutter_text.line_wrap = true;
             this._column.add_child(label);
             return label;
         });
-        this.line.text = '♪';
-        this.line.visible = lines.length > 0;
-        const show = lines.length > 0;
-        if (show && !this._shown)
-            this._island.addPage(this.page, 'Lyrics', 'audio-x-generic-symbolic');
-        else if (!show && this._shown)
-            this._island.removePage(this.page);
-        this._shown = show;
+        this.page.visible = lines.length > 0;
         this._tick();
     }
 
@@ -220,9 +207,6 @@ export class Lyrics {
     destroy() {
         this._cancellable.cancel();
         this._clearTimer();
-        if (this._shown)
-            this._island.removePage(this.page);
         this.page.destroy();
-        this.line.destroy();
     }
 }

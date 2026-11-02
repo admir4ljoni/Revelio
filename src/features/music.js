@@ -5,6 +5,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
+import Pango from 'gi://Pango';
 import Soup from 'gi://Soup';
 import St from 'gi://St';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
@@ -40,7 +41,7 @@ const fmt = us => {
 export class Music {
     constructor(island) {
         this._island = island;
-        this._players = new Map(); // bus name -> {proxy, stamp}
+        this._players = new Map(); // bus name -> {proxy, stamp, app}
         this._player = null;
         this._cancellable = new Gio.Cancellable();
         this._soup = new Soup.Session({user_agent: 'Revelio (GNOME Shell extension)'});
@@ -51,7 +52,7 @@ export class Music {
         this._artUrl = null;
         this._artCache = new Map(); // url -> GLib.Bytes, insertion order = age
         this._bars = []; // [actor, ms]
-        this._lyrics = new Lyrics(island, this._soup);
+        this._lyrics = new Lyrics(this._soup);
         this._lyrics.page.connectObject('notify::mapped', () => this._syncTick(true), this);
 
         this._buildCompact();
@@ -82,10 +83,13 @@ export class Music {
 
     // --- UI ---
 
-    _controls() {
-        const box = new St.BoxLayout({style_class: 'revelio-media-controls', y_align: Clutter.ActorAlign.CENTER});
+    _controls(big = false) {
+        const box = new St.BoxLayout({style_class: big ? 'revelio-player-controls' : 'revelio-media-controls',
+            y_align: Clutter.ActorAlign.CENTER, x_align: Clutter.ActorAlign.CENTER});
         const button = (icon, action) => {
             const b = new St.Button({style_class: 'revelio-media-button', can_focus: true});
+            if (big && action === 'PlayPause')
+                b.add_style_class_name('revelio-play-big');
             b.child = new St.Icon({icon_name: icon});
             b.connect('clicked', () => this._player?.proxy[`${action}Async`]().catch(logError));
             box.add_child(b);
@@ -134,32 +138,37 @@ export class Music {
         this._compact = {left, right, beatLeft: this._beats[0], beatRight: this._beats[1], priority: 1};
     }
 
+    // [art][title, artist, player, seek bar, times, controls][lyrics column, when there are lyrics]
     _buildPage() {
         this._art = new St.Icon({style_class: 'revelio-art', fallback_icon_name: 'audio-x-generic-symbolic'});
+        const artFrame = new St.Bin({style_class: 'revelio-art-frame', child: this._art, y_align: Clutter.ActorAlign.CENTER});
         this._title = new St.Label({style_class: 'revelio-track-title'});
         this._artist = new St.Label({style_class: 'revelio-track-artist'});
-        this._pageControls = this._controls();
+        this._source = new St.Label({style_class: 'revelio-track-source'});
+        for (const l of [this._title, this._artist])
+            l.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        this._pageControls = this._controls(true);
         this._slider = new Slider.Slider(0);
+        this._slider.add_style_class_name('revelio-seek');
         this._slider.x_expand = true;
         this._slider.connectObject(
             'drag-begin', () => (this._dragging = true),
             'notify::value', () => this._dragging && this._showTime(this._slider.value * this._length()),
             'drag-end', () => this._seekTo(this._slider.value * this._length()),
             this);
-        this._time = new St.Label({style_class: 'revelio-track-time', y_align: Clutter.ActorAlign.CENTER});
+        this._elapsed = new St.Label({style_class: 'revelio-track-time', x_expand: true});
+        this._remaining = new St.Label({style_class: 'revelio-track-time'});
+        const times = new St.BoxLayout();
+        times.add_child(this._elapsed);
+        times.add_child(this._remaining);
 
-        const seek = new St.BoxLayout();
-        seek.add_child(this._slider);
-        seek.add_child(this._time);
-        const info = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
-        info.add_child(this._title);
-        info.add_child(this._artist);
-        info.add_child(this._lyrics.line);
-        info.add_child(this._pageControls.box);
-        info.add_child(seek);
+        const info = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-track-info',
+            x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        [this._title, this._artist, this._source, this._slider, times, this._pageControls.box].forEach(a => info.add_child(a));
         this.page = new St.BoxLayout({style_class: 'revelio-music-page', x_expand: true});
-        this.page.add_child(this._art);
+        this.page.add_child(artFrame);
         this.page.add_child(info);
+        this.page.add_child(this._lyrics.page);
         this.page.connectObject('notify::mapped', () => this._syncTick(true), this);
         this._compact.page = this.page;
     }
@@ -167,7 +176,7 @@ export class Music {
     // --- players ---
 
     _add(name) {
-        const entry = {proxy: null, stamp: 0};
+        const entry = {proxy: null, stamp: 0, app: name.slice(PREFIX.length).split('.')[0]};
         this._players.set(name, entry);
         PlayerProxy(Gio.DBus.session, name, PATH, (proxy, error) => {
             if (this._players.get(name) !== entry)
@@ -257,6 +266,8 @@ export class Music {
         this._marqueeText.forEach(l => (l.text = text));
         this._title.text = m.title;
         this._artist.text = m.artist;
+        const app = this._player.app;
+        this._source.text = app ? `● ${app[0].toUpperCase()}${app.slice(1)}` : '';
         for (const c of [this._compactControls, this._pageControls]) {
             /** @type {St.Icon} */ (c.play.child).icon_name = playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
             c.prev.reactive = !!proxy.CanGoPrevious;
@@ -335,6 +346,10 @@ export class Music {
     _showArt(bytes) {
         const gicon = bytes ? new Gio.BytesIcon({bytes}) : null;
         this._art.gicon = gicon;
+        if (gicon)
+            this._art.remove_style_class_name('revelio-art-empty');
+        else
+            this._art.add_style_class_name('revelio-art-empty');
         this._compactArt.gicon = gicon;
         this._shownArt = bytes;
         if (!bytes) {
@@ -472,7 +487,8 @@ export class Music {
 
     _showTime(us) {
         const len = this._length();
-        this._time.text = len > 0 ? `${fmt(us)} / ${fmt(len)}` : fmt(us);
+        this._elapsed.text = fmt(us);
+        this._remaining.text = len > 0 ? `-${fmt(len - us)}` : '';
     }
 
     _syncTick(reread) {
