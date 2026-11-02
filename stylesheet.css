@@ -300,7 +300,7 @@
 .revelio-card-caption { color: #999; font-size: 8.5pt; }
 .revelio-card-value { font-weight: bold; font-size: 11pt; font-feature-settings: "tnum"; }
 .revelio-card-track { height: 3px; border-radius: 2px; background-color: rgba(255, 255, 255, 0.1); margin-top: 4px; }
-.revelio-card-fill { height: 3px; border-radius: 2px; background-color: #78aeed; }
+.revelio-card-fill { height: 3px; border-radius: 2px; background-color: -st-accent-color; }
 .revelio-sys-bottom { spacing: 22px; }
 .revelio-sys-details { width: 190px; }
 .revelio-sys-graph { width: 200px; }

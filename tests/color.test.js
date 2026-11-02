@@ -1,5 +1,5 @@
 // gjs -m tests/color.test.js
-import {accent} from '../src/lib/color.js';
+import {accent, heat} from '../src/lib/color.js';
 
 const eq = (a, b) => {
     if (JSON.stringify(a) !== JSON.stringify(b))
@@ -14,3 +14,9 @@ eq(accent(image([[200, 0, 0], [200, 0, 0], [0, 200, 0], [10, 10, 10]]), 3, 6, 2,
 // Grey art: no accent. RGBA with row padding is read right.
 eq(accent(image([[90, 90, 90, 255], [200, 200, 200, 255], [0, 0, 0, 0], [5, 5, 5, 255], [9, 9, 9, 255], [0, 0, 0, 0]]), 4, 12, 2, 2), null);
 print('color ok');
+
+// heat: accent up to half, yellow at 75%, red when full (clamped).
+eq(heat([0, 100, 200], 0.3), [0, 100, 200]);
+eq(heat([0, 100, 200], 0.75), [245, 194, 17]);
+eq(heat([0, 100, 200], 2), [224, 27, 36]);
+eq(heat([0, 100, 200], 0.625), [123, 147, 109]);

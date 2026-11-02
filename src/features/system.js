@@ -6,6 +6,7 @@ import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 import * as S from '../lib/stats.js';
+import {heat} from '../lib/color.js';
 
 const HISTORY = 60; // samples, one a second
 const APPS = 4;
@@ -40,8 +41,15 @@ function listDir(path) {
 const fmtRate = b => (b < 1000 ? `${Math.round(b)} B/s` : `${GLib.format_size(b)}/s`);
 const pct = f => `${Math.round(f * 100)}%`;
 
+// The system accent color as [r, g, b] 0..255 (cheap to read, so it's read per sample, no signal).
+const accentRgb = () => {
+    const [c] = St.ThemeContext.get_for_stage(global.stage).get_accent_color();
+    return c ? [c.red, c.green, c.blue] : [120, 174, 237];
+};
+
 // A stat card: caption, value and a level bar (the fill is scaled, so no relayout per sample).
-function card(caption) {
+// The bar is the accent color (CSS); a `hot` one (high is bad) turns yellow then red as it fills.
+function card(caption, hot = false) {
     const value = new St.Label({style_class: 'revelio-card-value'});
     const fill = new St.Widget({style_class: 'revelio-card-fill', x_expand: true, pivot_point: new Graphene.Point({x: 0, y: 0})});
     const track = new St.Widget({style_class: 'revelio-card-track', layout_manager: new Clutter.BinLayout(), x_expand: true});
@@ -53,6 +61,11 @@ function card(caption) {
     return {box, value, set(text, level) {
         value.text = text;
         fill.scale_x = Math.max(0, Math.min(1, level ?? 0));
+        if (hot) {
+            const style = `background-color: rgb(${heat(accentRgb(), level ?? 0).join(',')});`;
+            if (fill.style !== style)
+                fill.style = style;
+        }
     }};
 }
 
@@ -118,7 +131,7 @@ export class System {
         }));
 
         // System page: stat cards on top; details, CPU history with per-core load, and top apps below.
-        this._cards = {cpu: card('CPU'), gpu: card('GPU'), mem: card('Memory'), disk: card('Drives'),
+        this._cards = {cpu: card('CPU', true), gpu: card('GPU', true), mem: card('Memory', true), disk: card('Drives', true),
             net: card('Network'), bat: card('Battery')};
         this._cards.gpu.box.visible = !!this._gpu;
         const cards = new St.BoxLayout({style_class: 'revelio-cards', x_expand: true});
@@ -345,6 +358,7 @@ export class System {
         cr.setSourceRGBA(1, 1, 1, 0.08);
         cr.rectangle(0, 0, w, histH);
         cr.fill();
+        const accent = accentRgb(), rgb = c => c.map(v => v / 255);
         const hist = this._history ?? [], step = w / (HISTORY - 1);
         if (hist.length > 1) {
             const x = i => w - (hist.length - 1 - i) * step;
@@ -352,7 +366,7 @@ export class System {
             hist.forEach((v, i) => cr.lineTo(x(i), histH * (1 - v)));
             cr.lineTo(w, histH);
             cr.closePath();
-            cr.setSourceRGBA(0.47, 0.68, 0.93, 0.6);
+            cr.setSourceRGBA(...rgb(accent), 0.6);
             cr.fill();
         }
         const cores = this._cores ?? [], bw = cores.length ? w / cores.length : 0;
@@ -360,7 +374,7 @@ export class System {
             cr.setSourceRGBA(1, 1, 1, 0.12);
             cr.rectangle(i * bw + 1, histH + 3, bw - 2, coreH);
             cr.fill();
-            cr.setSourceRGBA(0.47, 0.68, 0.93, 1);
+            cr.setSourceRGBA(...rgb(heat(accent, v)), 1);
             cr.rectangle(i * bw + 1, h - coreH * v, bw - 2, coreH * v);
             cr.fill();
         });

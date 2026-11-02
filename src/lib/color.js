@@ -30,3 +30,12 @@ export function accent(pixels, channels, rowstride, width, height) {
     const k = 255 / Math.max(...rgb);
     return rgb.map(c => Math.round(c * k * 0.75 + 255 * 0.25));
 }
+
+// Bar color for a level 0..1 where high is bad: the accent up to half, then toward yellow at 75%
+// and red when full. rgb and result are 0..255.
+const YELLOW = [245, 194, 17], RED = [224, 27, 36];
+export function heat(rgb, level) {
+    const mix = (a, b, t) => a.map((c, i) => Math.round(c + (b[i] - c) * t));
+    const l = Math.max(0, Math.min(1, level));
+    return l <= 0.5 ? rgb : l <= 0.75 ? mix(rgb, YELLOW, (l - 0.5) * 4) : mix(YELLOW, RED, (l - 0.75) * 4);
+}
