@@ -372,3 +372,4 @@
 .revelio-money-in { color: #57e389; }
 .revelio-money-move { color: #bbb; }
 .revelio-money-form { spacing: 10px; padding-top: 4px; }
+.revelio-money-day { font-size: 9pt; font-weight: bold; min-width: 76px; text-align: center; }

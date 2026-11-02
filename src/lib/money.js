@@ -34,6 +34,16 @@ export const monthName = (month, short = false) => {
     const [y, m] = ym(month);
     return `${short ? MONTHS[m - 1].slice(0, 3) : MONTHS[m - 1]} ${y}`;
 };
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// 'Today', 'Yesterday', else 'Fri 30 Oct' (with the year when it isn't this year's).
+export function dayLabel(date, today) {
+    if (date === today)
+        return 'Today';
+    if (date === addDays(today, -1))
+        return 'Yesterday';
+    const [y, m, d] = date.split('-').map(Number);
+    return `${DAYS[new Date(y, m - 1, d).getDay()]} ${d} ${MONTHS[m - 1].slice(0, 3)}${date.slice(0, 4) === today.slice(0, 4) ? '' : ` ${y}`}`;
+}
 export const monthOf = e => (e.kind === 'in' && e.month ? e.month : e.date.slice(0, 7));
 export const defaultMonth = date => (Number(date.slice(8)) >= LATE_DAY ? addMonths(date.slice(0, 7), 1) : date.slice(0, 7));
 export const label = tag => tag[0].toUpperCase() + tag.slice(1);

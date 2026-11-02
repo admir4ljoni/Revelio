@@ -129,18 +129,26 @@ export class Money {
         };
         this._walletSeg = segmented(Object.entries(M.WALLETS), pickWallet);
         this._moveSeg = segmented([['cash', 'Cash → E-wallet'], ['ewallet', 'E-wallet → Cash']], pickWallet);
-        this._dateSeg = segmented([[0, 'Today'], [-1, 'Yesterday']], d => {
-            this._dayOffset = d;
-            this._month = null; // back to the default for the new date
-            this._syncForm();
-        });
+        // Day stepper: ‹ Fri 30 Oct › plus Today. No future days.
+        const step = (icon, change) => {
+            const b = new St.Button({style_class: 'revelio-row-action revelio-cal-nav', can_focus: true, child: new St.Icon({icon_name: icon})});
+            b.connect('clicked', () => this._setDay(change(this._dayOffset)));
+            return b;
+        };
+        this._dayLabel = new St.Label({style_class: 'revelio-money-day', y_align: Clutter.ActorAlign.CENTER});
+        this._dayNext = step('go-next-symbolic', d => Math.min(0, d + 1));
+        this._dayToday = new St.Button({style_class: 'revelio-segment revelio-chip', can_focus: true, label: 'Today'});
+        this._dayToday.connect('clicked', () => this._setDay(0));
+        this._dateBox = new St.BoxLayout({style_class: 'revelio-segmented', y_align: Clutter.ActorAlign.CENTER});
+        for (const a of [step('go-previous-symbolic', d => d - 1), this._dayLabel, this._dayNext, this._dayToday])
+            this._dateBox.add_child(a);
         this._monthSeg = new St.BoxLayout(); // "counts for" this/next month, rebuilt with the date
         const cancel = new St.Button({style_class: 'revelio-pill revelio-pill-small', can_focus: true, label: 'Cancel'});
         cancel.connect('clicked', () => this._closeForm());
         this._saveButton = new St.Button({style_class: 'revelio-pill revelio-pill-small revelio-pill-accent', can_focus: true});
         this._saveButton.connect('clicked', () => this._save());
         const options = new St.BoxLayout({style_class: 'revelio-row'});
-        for (const a of [this._walletSeg.actor, this._moveSeg.actor, this._dateSeg.actor, this._monthSeg,
+        for (const a of [this._walletSeg.actor, this._moveSeg.actor, this._dateBox, this._monthSeg,
             new St.Widget({x_expand: true}), cancel, this._saveButton])
             options.add_child(a);
 
@@ -177,6 +185,12 @@ export class Money {
         this._render();
     }
 
+    _setDay(offset) {
+        this._dayOffset = offset;
+        this._month = null; // back to the default "counts for" month of the new date
+        this._syncForm();
+    }
+
     _date() {
         return M.addDays(M.iso(new Date()), this._dayOffset);
     }
@@ -185,10 +199,13 @@ export class Money {
         const f = this._form, date = this._date();
         this._walletSeg.actor.visible = f !== 'move';
         this._moveSeg.actor.visible = f === 'move';
-        this._dateSeg.actor.visible = f !== 'recount';
+        this._dateBox.visible = f !== 'recount';
         this._walletSeg.set(this._wallet);
         this._moveSeg.set(this._wallet);
-        this._dateSeg.set(this._dayOffset);
+        this._dayLabel.text = M.dayLabel(date, M.iso(new Date()));
+        this._dayNext.reactive = this._dayOffset < 0;
+        this._dayNext.opacity = this._dayOffset < 0 ? 255 : 70;
+        this._dayToday.visible = this._dayOffset < 0;
 
         this._monthSeg.destroy_all_children();
         if (f === 'in') {

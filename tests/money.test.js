@@ -23,6 +23,8 @@ eq(M.daysIn('2028-02'), 29);
 eq(M.defaultMonth('2026-11-24'), '2026-11');
 eq(M.defaultMonth('2026-12-27'), '2027-01'); // late salary counts for next month
 eq(M.monthName('2026-11'), 'November 2026');
+eq(['2026-11-02', '2026-11-01', '2026-10-30', '2025-12-31'].map(d => M.dayLabel(d, '2026-11-02')),
+    ['Today', 'Yesterday', 'Fri 30 Oct', 'Wed 31 Dec 2025']);
 eq(M.clean([{kind: 'in', amount: 5, wallet: 'cash', date: '2026-11-01'}, {kind: 'out', amount: 1.5, wallet: 'cash', date: '2026-11-01'},
     {kind: 'move', amount: 5, wallet: 'cash', to: 'cash', date: '2026-11-01'}, null, {kind: 'x'}]).length, 1);
 
