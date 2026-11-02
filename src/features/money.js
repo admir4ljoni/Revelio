@@ -55,6 +55,19 @@ export class Money {
             actions.add_child(b);
         }
         actions.add_child(new St.Widget({x_expand: true}));
+        // Eye: masks the rings and amounts until clicked again (remembered across restarts).
+        this._hidden = store.load('money-hidden', false) === true;
+        this._eye = new St.Button({style_class: 'revelio-pill revelio-pill-small', can_focus: true, child: (this._eyeIcon = new St.Icon())});
+        this._eye.connect('clicked', () => {
+            this._hidden = !this._hidden;
+            try {
+                store.save('money-hidden', this._hidden);
+            } catch (e) {
+                logError(e, 'Revelio: saving money-hidden');
+            }
+            this._render();
+        });
+        actions.add_child(this._eye);
         const history = pill('view-list-bullet-symbolic', 'History');
         history.connect('clicked', () => this._show('history'));
         actions.add_child(history);
@@ -84,7 +97,7 @@ export class Money {
         for (const [key, name] of [['total', 'Total'], ['cash', 'Cash'], ['ewallet', 'E-wallet']]) {
             const r = {key, used: 0, pace: null, state: 'ok'};
             r.area = new St.DrawingArea({style_class: 'revelio-money-ring'});
-            r.area.connect('repaint', area => paintRing(area, r.used, RING[r.state], r.pace));
+            r.area.connect('repaint', area => paintRing(area, this._hidden ? 0 : r.used, RING[r.state], this._hidden ? null : r.pace));
             r.value = new St.Label({style_class: 'revelio-money-ring-value', x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.CENTER});
             const dial = new St.Widget({layout_manager: new Clutter.BinLayout()});
@@ -327,20 +340,23 @@ export class Money {
         if (this._form)
             return;
         const date = M.iso(new Date()), t = M.today(this._entries, date);
+        const hide = this._hidden, idr = n => (hide ? 'Rp •••' : M.idr(n)), pct = x => (hide ? '•••' : M.pct(x));
+        this._eyeIcon.icon_name = hide ? 'view-conceal-symbolic' : 'view-reveal-symbolic';
+        this._eye.accessible_name = hide ? 'Show amounts' : 'Hide amounts';
         const monthName = M.monthName(t.month).split(' ')[0];
         const total = this._rings.total;
         total.used = t.used ?? (t.spent ? 1 : 0);
         total.pace = t.pace;
         total.state = t.left < 0 || (t.spent > 0 && (t.used ?? 1) >= 1) ? 'over'
             : (t.paceUsed ?? 0) > t.pace + 0.1 ? 'ahead' : 'ok';
-        total.value.text = t.used === null ? '—' : M.pct(t.used);
+        total.value.text = t.used === null ? '—' : pct(t.used);
         const wallets = {};
         for (const key of Object.keys(M.WALLETS)) {
             const w = wallets[key] = M.walletMonth(this._entries, key, date), r = this._rings[key];
             r.used = w.used ?? (w.spent ? 1 : 0);
             r.pace = w.pace;
             r.state = w.left < 0 ? 'over' : 'ok';
-            r.value.text = w.used === null ? '—' : M.pct(w.used);
+            r.value.text = w.used === null ? '—' : pct(w.used);
         }
         for (const r of Object.values(this._rings)) {
             r.area.queue_repaint();
@@ -352,17 +368,17 @@ export class Money {
 
         if (this._selected === 'total') {
             this._caption.text = 'LEFT FOR TODAY';
-            this._setBig(t.todayLeft);
-            this._line1.text = `${M.idr(t.left)} of ${M.idr(t.budget)} left in ${monthName}`;
-            this._line2.text = `Spent ${M.idr(t.spent)} · ${t.used === null ? 'no money added yet' : `${M.pct(t.used)} of the month’s money`}`;
-            this._tip.text = M.tips(this._entries, date).join('\n');
+            this._setBig(t.todayLeft, idr);
+            this._line1.text = `${idr(t.left)} of ${idr(t.budget)} left in ${monthName}`;
+            this._line2.text = `Spent ${idr(t.spent)} · ${t.used === null ? 'no money added yet' : `${pct(t.used)} of the month’s money`}`;
+            this._tip.text = hide ? '' : M.tips(this._entries, date).join('\n');
         } else {
             const w = wallets[this._selected];
             this._caption.text = `${M.WALLETS[w.wallet].toUpperCase()} · LEFT`;
-            this._setBig(w.left);
-            this._line1.text = `Spent ${M.idr(w.spent)} from ${M.WALLETS[w.wallet].toLowerCase()} in ${monthName}`;
-            this._line2.text = w.left > 0 ? `About ${M.idr(w.perDay)} a day for the rest of ${monthName}` : '';
-            this._tip.text = w.left < 0 ? 'Below zero: some money going in wasn’t logged, or a spend went to the wrong wallet.' : '';
+            this._setBig(w.left, idr);
+            this._line1.text = `Spent ${idr(w.spent)} from ${M.WALLETS[w.wallet].toLowerCase()} in ${monthName}`;
+            this._line2.text = w.left > 0 ? `About ${idr(w.perDay)} a day for the rest of ${monthName}` : '';
+            this._tip.text = !hide && w.left < 0 ? 'Below zero: some money going in wasn’t logged, or a spend went to the wrong wallet.' : '';
         }
 
         this._reportButton.reactive = this._entries.length > 0;
@@ -376,9 +392,9 @@ export class Money {
             this._list.add_child(this._row(e, date));
     }
 
-    _setBig(amount) {
-        this._big.text = M.idr(amount);
-        if (amount < 0)
+    _setBig(amount, idr) {
+        this._big.text = idr(amount);
+        if (amount < 0 && !this._hidden)
             this._big.add_style_pseudo_class('negative');
         else
             this._big.remove_style_pseudo_class('negative');
