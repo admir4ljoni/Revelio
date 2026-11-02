@@ -8,20 +8,22 @@ import Gtk from 'gi://Gtk?version=4.0';
 import * as store from './lib/store.js';
 import * as T from './lib/tasks.js';
 
+const HINT = 'Add a task (#tag category, @tomorrow 9:00 deadline), Enter to save';
 const DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'revelio@midra']);
 
 class TasksWindow {
     constructor(app) {
         this._tasks = T.clean(store.load('tasks', []));
         this._filter = null;
+        this._editing = null; // the task the entry is renaming
 
-        this._entry = new Gtk.Entry({placeholder_text: 'Add a task (#tag for a category), Enter to save', hexpand: true,
-            primary_icon_name: 'list-add-symbolic'});
+        this._entry = new Gtk.Entry({placeholder_text: HINT, hexpand: true, primary_icon_name: 'list-add-symbolic'});
         this._entry.connect('activate', () => {
-            const task = T.parse(this._entry.text, this._filter);
-            this._entry.text = '';
+            const editing = this._editing;
+            const task = editing ? T.edit(editing, this._entry.text) : T.parse(this._entry.text, this._filter);
+            this._setEditing(null);
             if (task.text)
-                this._change([...this._tasks, task]);
+                this._change(editing ? this._tasks.map(t => (t === editing ? task : t)) : [...this._tasks, task]);
         });
         this._chips = new Gtk.Box({spacing: 6});
         this._list = new Gtk.ListBox({selection_mode: Gtk.SelectionMode.NONE, css_classes: ['boxed-list']});
@@ -100,16 +102,30 @@ class TasksWindow {
         this._render();
     }
 
+    _setEditing(task) {
+        this._editing = task;
+        this._entry.placeholder_text = task ? 'Edit the task, Enter to save (empty cancels)' : HINT;
+        this._entry.primary_icon_name = task ? 'document-edit-symbolic' : 'list-add-symbolic';
+        this._entry.text = task ? T.format(task) : '';
+        if (task)
+            this._entry.grab_focus();
+    }
+
     _render() {
+        const now = Date.now();
+        if (this._editing && !this._tasks.includes(this._editing))
+            this._setEditing(null);
         const tags = T.tags(this._tasks);
-        if (this._filter && !tags.includes(this._filter))
+        const hasOverdue = this._tasks.some(t => T.overdue(t, now));
+        if (this._filter && !(this._filter === T.OVERDUE ? hasOverdue : tags.includes(this._filter)))
             this._filter = null;
         for (let c; (c = this._chips.get_first_child());)
             this._chips.remove(c);
-        this._chips.visible = tags.length > 0;
+        const chips = [null, ...hasOverdue ? [T.OVERDUE] : [], ...tags];
+        this._chips.visible = chips.length > 1;
         let group = null;
-        for (const tag of [null, ...tags]) {
-            const chip = new Gtk.ToggleButton({label: tag ? `#${tag}` : 'All', active: tag === this._filter, css_classes: ['pill'], group});
+        for (const tag of chips) {
+            const chip = new Gtk.ToggleButton({label: tag === T.OVERDUE ? 'Overdue' : tag ? `#${tag}` : 'All', active: tag === this._filter, css_classes: ['pill'], group});
             group ??= chip;
             chip.connect('toggled', () => {
                 if (chip.active && this._filter !== tag) {
@@ -124,7 +140,7 @@ class TasksWindow {
         }
 
         this._list.remove_all();
-        const shown = T.visible(this._tasks, this._filter);
+        const shown = T.visible(this._tasks, this._filter, now);
         const done = shown.filter(t => t.done).length;
         this._count.label = shown.length ? `${done}/${shown.length} done` : '';
         this._clearDone.visible = done > 0;
@@ -133,12 +149,23 @@ class TasksWindow {
         for (const task of shown) {
             const check = new Gtk.CheckButton({active: !!task.done, valign: Gtk.Align.CENTER});
             check.connect('toggled', () => this._change(this._tasks.map(t => (t === task ? {...t, done: check.active} : t))));
-            const row = new Adw.ActionRow({title: GLib.markup_escape_text(task.text, -1), activatable_widget: check});
+            const late = T.overdue(task, now);
+            const row = new Adw.ActionRow({title: GLib.markup_escape_text(task.text, -1), activatable_widget: check,
+                subtitle: late && task.reason ? GLib.markup_escape_text(`Declined: ${task.reason}`, -1) : ''});
             if (task.done)
                 row.add_css_class('dim-label');
             row.add_prefix(check);
-            if (task.tag && !this._filter)
+            // Its own category stays in view under Overdue.
+            if (task.tag && this._filter !== task.tag)
                 row.add_suffix(new Gtk.Label({label: `#${task.tag}`, css_classes: ['accent', 'caption'], valign: Gtk.Align.CENTER}));
+            if (task.due) {
+                row.add_suffix(new Gtk.Label({label: late ? `Overdue · ${T.dueLabel(task.due, now)}` : T.dueLabel(task.due, now),
+                    css_classes: [late ? 'error' : 'dim-label', 'caption'], valign: Gtk.Align.CENTER}));
+            }
+            const edit = new Gtk.Button({icon_name: 'document-edit-symbolic', css_classes: ['flat'], valign: Gtk.Align.CENTER,
+                tooltip_text: 'Edit'});
+            edit.connect('clicked', () => this._setEditing(task));
+            row.add_suffix(edit);
             const remove = new Gtk.Button({icon_name: 'user-trash-symbolic', css_classes: ['flat'], valign: Gtk.Align.CENTER,
                 tooltip_text: 'Remove'});
             remove.connect('clicked', () => this._change(this._tasks.filter(t => t !== task)));
