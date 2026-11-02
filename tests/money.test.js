@@ -52,6 +52,10 @@ const t = M.today(e, '2026-11-02');
 eq([t.day, t.days, t.spentToday], [2, 30, 40000]); // untracked isn't today's spending
 eq(Math.round(t.perDay), Math.round((4500000 + 40000) / 29));
 eq(Math.round(t.todayLeft), Math.round(t.perDay - 40000));
+const cash = M.walletMonth(e, 'cash', '2026-11-02'), ew = M.walletMonth(e, 'ewallet', '2026-11-02');
+eq([cash.left, cash.spent, cash.used], [400000, 100000, 0.2]); // 500k moved in, 100k spent
+eq([ew.left, ew.spent, Math.round(ew.perDay)], [4100000, 300000, Math.round(4100000 / 29)]);
+eq(M.walletMonth([], 'cash', '2026-11-02').used, null);
 eq(M.tips(e, '2026-11-02')[1], 'Food is 60% of your day-to-day spending (100% last month).');
 eq(M.tips(e, '2026-11-02')[0].startsWith('Rp 300.000 is untracked'), true);
 eq(M.tips([], '2026-11-02'), ['Add this month’s money with + Money to see your budget.']);

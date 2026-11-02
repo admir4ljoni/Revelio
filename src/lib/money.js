@@ -134,6 +134,18 @@ export function today(entries, date) {
         paceUsed: pool > 0 ? (s.spent - s.fixed) / pool : null};
 }
 
+// One wallet this month: what's in it now, what's been spent from it, and the share spent of the
+// wallet's money (spent ÷ (now + spent), so moves in and out count). perDay spreads what's in it
+// over the days left, today included.
+export function walletMonth(entries, wallet, date) {
+    const month = date.slice(0, 7), left = balances(entries, date)[wallet];
+    const spent = entries.reduce((n, e) => n +
+        (e.kind === 'out' && e.wallet === wallet && e.date.startsWith(month) && e.date <= date ? e.amount : 0), 0);
+    const pool = left + spent, day = Number(date.slice(8)), days = daysIn(month);
+    return {wallet, month, left, spent, used: pool > 0 ? spent / pool : null, pace: day / days,
+        perDay: left / (days - day + 1)};
+}
+
 // Up to two short pieces of advice for the month so far, most urgent first.
 export function tips(entries, date) {
     const t = today(entries, date);
