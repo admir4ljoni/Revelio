@@ -1,0 +1,11 @@
+import {ago} from '../src/lib/ago.js';
+const eq = (a, b) => { if (a !== b) throw new Error(`${a} !== ${b}`); };
+const min = 60e6;
+eq(ago(0), 'now');
+eq(ago(59e6), 'now');
+eq(ago(5 * min), '5m');
+eq(ago(59 * min), '59m');
+eq(ago(60 * min), '1h');
+eq(ago(1439 * min), '23h');
+eq(ago(2 * 1440 * min), '2d');
+print('ago: ok');

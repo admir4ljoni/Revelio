@@ -5,15 +5,12 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
+import {ago} from '../lib/ago.js';
 
 const MAX_ITEMS = 20;
 const MAX_CHARS = 100000; // ponytail: bigger copies aren't kept; raise if real use needs it
 const SECRET = 'x-kde-passwordManagerHint';
 
-const ago = us => {
-    const m = Math.floor((GLib.get_monotonic_time() - us) / 60e6);
-    return m < 1 ? 'now' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
-};
 
 export class Clipboard {
     constructor(island) {
@@ -74,7 +71,7 @@ export class Clipboard {
             label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             const row = new St.BoxLayout({style_class: 'revelio-row', x_expand: true});
             row.add_child(label);
-            row.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: ago(at), y_align: Clutter.ActorAlign.CENTER}));
+            row.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: ago(GLib.get_monotonic_time() - at), y_align: Clutter.ActorAlign.CENTER}));
             const b = new St.Button({style_class: 'revelio-list-row revelio-clip-item', child: row, can_focus: true,
                 x_expand: true, x_align: Clutter.ActorAlign.FILL});
             b.connect('clicked', () => this._clipboard.set_text(St.ClipboardType.CLIPBOARD, text));
