@@ -98,6 +98,12 @@ export class Island {
             'button-release-event', (_a, event) => {
                 // Buttons, entries and lists handle their own clicks (media buttons, page widgets).
                 const target = global.stage.get_event_actor(event);
+                // The left wing (song, alert) always opens on its feature's tab.
+                const page = (this._popup ?? this._compact)?.page;
+                if (!this._expanded && page && this._leftWing.contains(target)) {
+                    this.open(page);
+                    return Clutter.EVENT_STOP;
+                }
                 if (this._rightWing.contains(target) || (this._expanded && this._open.contains(target)))
                     return Clutter.EVENT_PROPAGATE;
                 // With hover-to-open the pointer is always over the open island, so a click there
