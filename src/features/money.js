@@ -1,7 +1,9 @@
 // Money: a monthly budget on one page. Add money (cash or e-wallet), log spending ("25k lunch #food";
 // Untracked for money that went missing), and move money between wallets, each on any past day.
 // Three rings: the month's money (Total), Cash and E-wallet, each showing the share spent with a tick
-// for how much of the month has gone; the panel beside them details the last one hovered or clicked. Stored in ~/.local/share/revelio@midra/money.json. Logic lives in lib/money.js.
+// for how much of the month has gone; the panel beside them details the last one hovered or clicked.
+// Plan: monthly set-asides per category and savings pockets (target, date, what it's for).
+// Stored in ~/.local/share/revelio@midra/money.json and money-plan.json. Logic lives in lib/money.js.
 // Report writes ~/Documents/Revelio/Money.xlsx (a sheet per month, rebuilt each time) and opens it.
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -18,7 +20,12 @@ const FORMS = {
     in: {title: 'Add money', hint: 'Amount and note, e.g. 5jt salary', save: 'Add'},
     out: {title: 'Spend', hint: 'Amount and note, e.g. 25k lunch #food', save: 'Save'},
     move: {title: 'Move money', hint: 'Amount, e.g. 200k', save: 'Move'},
+    aside: {title: 'Set aside', hint: 'Amount each month and category, e.g. 200k #transport', save: 'Set'},
+    pocket: {title: 'New pocket', hint: 'Target and what it’s for, e.g. 5jt laptop @2027-06-01', save: 'Create'},
+    save: {title: 'Put in', hint: 'Amount, e.g. 200k', save: 'Put in'},
+    withdraw: {title: 'Take from', hint: 'Amount, e.g. 200k', save: 'Take'},
 };
+const DATED = ['in', 'out', 'move', 'save', 'withdraw']; // forms with a wallet and a day
 
 const pill = (icon, text) => {
     const box = new St.BoxLayout({style_class: 'revelio-pill-box'});
@@ -44,7 +51,9 @@ export class Money {
     constructor(island) {
         this._island = island;
         this._entries = M.clean(store.load('money', []));
-        this._form = null; // 'in' | 'out' | 'move' while a form is open
+        this._plan = M.cleanPlan(store.load('money-plan', null));
+        this._form = null; // a FORMS key while a form is open
+        this._view = 'overview';
         this._wallet = this._entries.at(-1)?.wallet ?? 'cash';
 
         const actions = new St.BoxLayout({style_class: 'revelio-row'});
@@ -55,6 +64,9 @@ export class Money {
             actions.add_child(b);
         }
         actions.add_child(new St.Widget({x_expand: true}));
+        const planButton = pill('view-pin-symbolic', 'Plan');
+        planButton.connect('clicked', () => this._show('plan'));
+        actions.add_child(planButton);
         const history = pill('view-list-bullet-symbolic', 'History');
         history.connect('clicked', () => this._show('history'));
         actions.add_child(history);
@@ -68,7 +80,8 @@ export class Money {
         this._overview = this._buildOverview();
         this._formBox = this._buildForm();
         this._historyBox = this._buildHistory();
-        for (const a of [this._overview, this._formBox, this._historyBox])
+        this._planBox = this._buildPlan();
+        for (const a of [this._overview, this._formBox, this._historyBox, this._planBox])
             this.page.add_child(a);
         // Recompute when shown: the day (and so the allowance and pace) may have changed. No timers.
         this.page.connect('notify::mapped', () => this.page.mapped && this._render());
@@ -152,6 +165,28 @@ export class Money {
         return box;
     }
 
+    _buildPlan() {
+        this._planList = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
+        const scroll = new St.ScrollView({y_expand: true, hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC, child: this._planList});
+        const head = new St.BoxLayout({style_class: 'revelio-row'});
+        head.add_child(new St.Label({style_class: 'revelio-section-title', text: 'Plan', x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER}));
+        for (const [text, form] of [['Set aside', 'aside'], ['Pocket', 'pocket']]) {
+            const b = pill('list-add-symbolic', text);
+            b.connect('clicked', () => this._openForm(form));
+            head.add_child(b);
+        }
+        const back = new St.Button({style_class: 'revelio-pill revelio-pill-small', can_focus: true, label: 'Back'});
+        back.connect('clicked', () => this._show('overview'));
+        head.add_child(back);
+        const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-money-history',
+            x_expand: true, y_expand: true, visible: false});
+        box.add_child(head);
+        box.add_child(scroll);
+        return box;
+    }
+
     _buildForm() {
         this._formTitle = new St.Label({style_class: 'revelio-section-title', y_align: Clutter.ActorAlign.CENTER});
         this._entry = new St.Entry({style_class: 'revelio-entry', can_focus: true, x_expand: true});
@@ -200,14 +235,17 @@ export class Money {
         return box;
     }
 
-    _openForm(form) {
+    // `pocket`: the pocket a save/withdraw form is for.
+    _openForm(form, pocket = null) {
+        this._from = this._view;
         this._form = form;
+        this._pocket = pocket;
         this._category = null;
         this._dayOffset = 0;
         this._month = null; // default from the date
         this._entry.text = '';
         this._entry.hint_text = FORMS[form].hint;
-        this._formTitle.text = FORMS[form].title;
+        this._formTitle.text = pocket ? `${FORMS[form].title} ${pocket.name}` : FORMS[form].title;
         this._saveButton.label = FORMS[form].save;
         this._formHint.text = '';
         this._show('form');
@@ -216,16 +254,18 @@ export class Money {
     }
 
     _closeForm() {
-        this._show('overview');
+        this._show(this._from ?? 'overview');
     }
 
-    // One view at a time in the page: 'overview' (with the actions), 'form' or 'history'.
+    // One view at a time in the page: 'overview' (with the actions), 'form', 'history' or 'plan'.
     _show(view) {
+        this._view = view;
         if (view !== 'form')
             this._form = null;
         this._actions.visible = this._overview.visible = view === 'overview';
         this._formBox.visible = view === 'form';
         this._historyBox.visible = view === 'history';
+        this._planBox.visible = view === 'plan';
         this._render();
     }
 
@@ -248,8 +288,9 @@ export class Money {
 
     _syncForm() {
         const f = this._form, date = this._date();
-        this._walletSeg.actor.visible = f !== 'move';
+        this._walletSeg.actor.visible = DATED.includes(f) && f !== 'move';
         this._moveSeg.actor.visible = f === 'move';
+        this._dateBox.visible = DATED.includes(f);
         this._walletSeg.set(this._wallet);
         this._moveSeg.set(this._wallet);
         this._dayLabel.text = M.dayLabel(date, M.iso(new Date()));
@@ -270,11 +311,13 @@ export class Money {
         }
 
         this._categories.destroy_all_children();
-        this._categories.visible = f === 'out';
-        if (f === 'out') {
+        this._categories.visible = f === 'out' || f === 'aside';
+        if (this._categories.visible) {
             const used = this._entries.filter(e => e.kind === 'out' && e.category).map(e => e.category);
-            // Untracked last: money that's gone without knowing where.
-            const tags = [...[...new Set([...M.PRESETS, ...used])].filter(t => t !== 'untracked').slice(0, 9), 'untracked'];
+            // Untracked last (money that's gone without knowing where); nothing to set aside for it.
+            const tags = [...new Set([...M.PRESETS, ...used])].filter(t => t !== 'untracked').slice(0, 9);
+            if (f === 'out')
+                tags.push('untracked');
             for (const tag of tags) {
                 const chip = new St.Button({style_class: 'revelio-segment revelio-chip', can_focus: true, label: M.label(tag)});
                 if (tag === this._category)
@@ -290,9 +333,18 @@ export class Money {
 
     _save() {
         const input = this._entry.text, f = this._form, date = this._date();
-        const {amount, note, tag} = M.parseEntry(input);
+        const {amount, note, tag, due} = M.parseEntry(input);
         if (!amount) {
             this._formHint.text = 'Type an amount, like 25k, 25.000 or 1,5jt.';
+            return;
+        }
+        if (f === 'aside' || f === 'pocket') {
+            this._savePlan(f, amount, note, tag ?? this._category, due);
+            return;
+        }
+        const pocket = this._pocket;
+        if (f === 'withdraw' && amount > M.pocketBalance(this._entries, pocket.id)) {
+            this._formHint.text = `${pocket.name} has ${M.idr(M.pocketBalance(this._entries, pocket.id))}.`;
             return;
         }
         /** @type {object} */
@@ -302,11 +354,42 @@ export class Money {
         } else if (f === 'in') {
             const month = this._month ?? M.defaultMonth(date);
             entry = {kind: 'in', ...entry, ...month !== date.slice(0, 7) ? {month} : {}};
-        } else {
+        } else if (f === 'move') {
             entry = {kind: 'move', ...entry, to: this._wallet === 'cash' ? 'ewallet' : 'cash'};
+        } else {
+            entry = {kind: f, ...entry, pocket: pocket.id, note: pocket.name};
         }
         this._change([...this._entries, entry]);
         this._closeForm();
+    }
+
+    _savePlan(f, amount, note, tag, due) {
+        const plan = this._plan;
+        if (f === 'aside') {
+            if (!tag) {
+                this._formHint.text = 'Pick a category or type one, like #transport.';
+                return;
+            }
+            this._setPlan({...plan, setAsides: [...plan.setAsides.filter(a => a.tag !== tag), {tag, amount}]});
+        } else {
+            if (!note) {
+                this._formHint.text = 'Say what it’s for, like 5jt laptop.';
+                return;
+            }
+            const pocket = {id: Date.now().toString(36), name: note, target: amount, ...due ? {due} : {}};
+            this._setPlan({...plan, pockets: [...plan.pockets, pocket]});
+        }
+        this._closeForm();
+    }
+
+    _setPlan(plan) {
+        this._plan = plan;
+        try {
+            store.save('money-plan', plan);
+        } catch (e) {
+            logError(e, 'Revelio: saving the money plan');
+        }
+        this._render();
     }
 
     _report() {
@@ -343,7 +426,7 @@ export class Money {
     _render() {
         if (this._form)
             return;
-        const date = M.iso(new Date()), t = M.today(this._entries, date);
+        const date = M.iso(new Date()), t = M.today(this._entries, date, this._plan.setAsides);
         // The eye hides amounts only; percentages and rings stay.
         const hide = this._hidden, idr = n => (hide ? 'Rp •••' : M.idr(n)), pct = M.pct;
         this._eyeIcon.icon_name = hide ? 'view-conceal-symbolic' : 'view-reveal-symbolic';
@@ -375,8 +458,11 @@ export class Money {
             this._caption.text = 'LEFT FOR TODAY';
             this._setBig(t.todayLeft, idr);
             this._line1.text = `${idr(t.left)} of ${idr(t.budget)} left in ${monthName}`;
-            this._line2.text = `Spent ${idr(t.spent)} · ${t.used === null ? 'no money added yet' : `${pct(t.used)} of the month’s money`}`;
-            this._tip.text = hide ? '' : M.tips(this._entries, date).join('\n');
+            const pockets = M.pocketBalance(this._entries);
+            const plan = [...t.reserved ? [`${idr(t.reserved)} set aside`] : [], ...pockets ? [`${idr(pockets)} in pockets`] : []];
+            this._line2.text = `Spent ${idr(t.spent)} · ${plan.length ? plan.join(' · ')
+                : t.used === null ? 'no money added yet' : `${pct(t.used)} of the month’s money`}`;
+            this._tip.text = hide ? '' : M.tips(this._entries, date, this._plan.setAsides).join('\n');
         } else {
             const w = wallets[this._selected];
             this._caption.text = `${M.WALLETS[w.wallet].toUpperCase()} · LEFT`;
@@ -387,6 +473,8 @@ export class Money {
         }
 
         this._reportButton.reactive = this._entries.length > 0;
+        if (this._planBox.visible)
+            this._renderPlan(t, date, idr);
         if (!this._historyBox.visible)
             return;
         this._list.destroy_all_children();
@@ -395,6 +483,51 @@ export class Money {
             this._list.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: 'Nothing logged yet'}));
         for (const [e] of recent)
             this._list.add_child(this._row(e, date));
+    }
+
+    _renderPlan(t, date, idr) {
+        this._planList.destroy_all_children();
+        const plan = this._plan;
+        if (!plan.setAsides.length && !plan.pockets.length) {
+            const hint = new St.Label({style_class: 'revelio-dim revelio-small',
+                text: 'Set money aside for a category each month (200k #transport), or save toward something in a pocket.'});
+            hint.clutter_text.line_wrap = true;
+            this._planList.add_child(hint);
+        }
+        for (const r of t.reserves) {
+            const sub = `${idr(r.spent)} of ${idr(r.amount)} used in ${M.monthName(t.month).split(' ')[0]} · ` +
+                (r.over ? `${idr(r.over)} over` : `${idr(r.left)} left`);
+            this._planList.add_child(this._planRow(`${M.label(r.tag)} · every month`, sub, idr(r.amount),
+                [['window-close-symbolic', () => this._setPlan({...plan, setAsides: plan.setAsides.filter(a => a.tag !== r.tag)})]]));
+        }
+        for (const p of plan.pockets) {
+            const pp = M.pocketPlan(this._entries, p, date);
+            const sub = [`${idr(pp.saved)} of ${idr(p.target)}`, ...p.due ? [`by ${M.dayLabel(p.due, date)}`] : [],
+                ...pp.need === 0 ? ['reached'] : pp.perMonth ? [`${idr(pp.perMonth)} a month`] : []].join(' · ');
+            const buttons = [['list-add-symbolic', () => this._openForm('save', p)]];
+            if (pp.saved > 0)
+                buttons.push(['send-to-symbolic', () => this._openForm('withdraw', p)]);
+            else // empty: nothing to lose
+                buttons.push(['window-close-symbolic', () => this._setPlan({...plan, pockets: plan.pockets.filter(x => x !== p)})]);
+            this._planList.add_child(this._planRow(p.name, sub, M.pct(pp.used), buttons));
+        }
+    }
+
+    // A plan row: title, sub line, value on the right, then icon buttons [[icon, onClick]].
+    _planRow(what, sub, value, buttons) {
+        const text = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
+        text.add_child(new St.Label({style_class: 'revelio-money-what', text: what}));
+        text.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: sub}));
+        const row = new St.BoxLayout({style_class: 'revelio-list-row revelio-money-row', reactive: true, track_hover: true});
+        row.add_child(text);
+        row.add_child(new St.Label({style_class: 'revelio-money-amount', y_align: Clutter.ActorAlign.CENTER, text: value}));
+        for (const [icon, onClick] of buttons) {
+            const b = new St.Button({style_class: 'revelio-row-action', can_focus: true, y_align: Clutter.ActorAlign.CENTER,
+                child: new St.Icon({icon_name: icon})});
+            b.connect('clicked', onClick);
+            row.add_child(b);
+        }
+        return row;
     }
 
     _setBig(amount, idr) {
@@ -409,13 +542,14 @@ export class Money {
         const what = e.kind === 'move' ? `${M.WALLETS[e.wallet]} → ${M.WALLETS[e.to]}`
             : e.note || (e.kind === 'in' ? 'Money added' : M.label(e.category || 'other'));
         const when = e.date === date ? 'Today' : e.date === M.addDays(date, -1) ? 'Yesterday' : e.date.slice(5).split('-').reverse().join('/');
-        const sub = e.kind === 'out' ? `${when} · ${M.label(e.category || 'other')}` : e.kind === 'in' && e.month
+        const pocket = e.kind === 'save' ? `${M.WALLETS[e.wallet]} → pocket` : e.kind === 'withdraw' ? `Pocket → ${M.WALLETS[e.wallet]}` : null;
+        const sub = pocket ? `${when} · ${pocket}` : e.kind === 'out' ? `${when} · ${M.label(e.category || 'other')}` : e.kind === 'in' && e.month
             ? `${when} · for ${M.monthName(e.month, true)}` : `${when} · ${M.WALLETS[e.wallet]}`;
         const text = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         text.add_child(new St.Label({style_class: 'revelio-money-what', text: what}));
         text.add_child(new St.Label({style_class: 'revelio-dim revelio-small', text: sub}));
-        const amount = new St.Label({style_class: `revelio-money-amount revelio-money-${e.kind}`, y_align: Clutter.ActorAlign.CENTER,
-            text: `${e.kind === 'out' ? '−' : e.kind === 'in' ? '+' : ''}${M.idr(e.amount).slice(3)}`});
+        const amount = new St.Label({style_class: `revelio-money-amount revelio-money-${pocket ? 'move' : e.kind}`,
+            y_align: Clutter.ActorAlign.CENTER, text: `${e.kind === 'out' ? '−' : e.kind === 'in' ? '+' : ''}${M.idr(e.amount).slice(3)}`});
         const remove = new St.Button({style_class: 'revelio-row-action', can_focus: true, y_align: Clutter.ActorAlign.CENTER,
             child: new St.Icon({icon_name: 'window-close-symbolic'})});
         remove.connect('clicked', () => this._change(this._entries.filter(x => x !== e)));
