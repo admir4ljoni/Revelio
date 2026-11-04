@@ -2,6 +2,7 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
+import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -40,7 +41,11 @@ export class Island {
         // Closed bar: [left wing][beat ⅃ clock L beat][right wing]. Only the center opens on hover,
         // so the wings (song text, media buttons) stay usable.
         // Clock: date | time | month (04  14:17  NOV), all readable at a glance; a small AM/PM.
-        const label = (style, align = Clutter.ActorAlign.CENTER) => new St.Label({style_class: style, y_align: align});
+        const label = (style, align = Clutter.ActorAlign.CENTER) => {
+            const l = new St.Label({style_class: style, y_align: align});
+            l.clutter_text.ellipsize = Pango.EllipsizeMode.NONE; // never "…": the island is sized to fit
+            return l;
+        };
         this._day = label('revelio-clock-side');
         this._month = label('revelio-clock-side');
         this._time = label('revelio-clock-time');
