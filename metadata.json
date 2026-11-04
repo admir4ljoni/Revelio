@@ -1,8 +1,10 @@
 {
   "uuid": "revelio@midra",
   "name": "Revelio",
-  "description": "A lightweight Dynamic Island for GNOME Shell: media, lyrics, pop-ups, focus timer, tasks and system stats in a notch at the top of the screen.",
-  "shell-version": ["50"],
+  "description": "A lightweight Dynamic Island for GNOME Shell: media controls with synced lyrics, volume, battery and headphone pop-ups, plus tabs for focus, tasks, money, calendar, shelf and system stats.\n\nLyrics are fetched from lrclib.net (the track's title, artist, album and length are sent), and album art from the address the music player gives. Nothing else leaves your computer.",
+  "shell-version": [
+    "50"
+  ],
   "settings-schema": "org.gnome.shell.extensions.revelio",
-  "url": ""
+  "url": "https://github.com/admir4ljoni/Revelio"
 }
