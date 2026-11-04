@@ -63,7 +63,7 @@ Settings open with `gnome-extensions prefs revelio@midra`, or from the gear on t
 ```bash
 git clone https://github.com/admir4ljoni/Revelio.git
 cd Revelio
-gnome-extensions pack --force --extra-source=src .
+gnome-extensions pack --force --extra-source=src --extra-source=icons .
 gnome-extensions install --force revelio@midra.shell-extension.zip
 ```
 

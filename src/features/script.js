@@ -51,7 +51,7 @@ export class Script {
             'key-press-event', (_a, event) => this._onKey(event.get_key_symbol()),
             'notify::mapped', () => !this.page.mapped && this._pause(),
             this);
-        island.addPage(this.page, 'Script', 'x-office-document-symbolic');
+        island.addPage(this.page, 'Script');
 
         settings.connectObject('changed::script-file', () => this._load(), 'changed::script-wpm', () => {
             if (this._playing())

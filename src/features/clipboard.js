@@ -40,7 +40,7 @@ export class Clipboard {
         this.page.add_child(scroll);
         // Times are relative; refresh them when the page shows instead of on a timer.
         this.page.connectObject('notify::mapped', () => this.page.mapped && this._render(), this);
-        island.addPage(this.page, 'Clipboard', 'edit-paste-symbolic');
+        island.addPage(this.page, 'Clipboard');
         this._render();
 
         global.display.get_selection().connectObject('owner-changed', (_s, type, source) => {

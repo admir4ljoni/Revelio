@@ -37,7 +37,7 @@ export class Shelf {
         this.page = new St.BoxLayout({style_class: 'revelio-tasks-page', orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         this.page.add_child(header);
         this.page.add_child(scroll);
-        island.addPage(this.page, 'Shelf', 'folder-symbolic');
+        island.addPage(this.page, 'Shelf');
         this._render();
 
         global.backend.get_dnd().connectObject(

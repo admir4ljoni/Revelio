@@ -29,7 +29,7 @@ const ADDONS = {
 export default class RevelioExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
-        this._island = new Island(this._settings, () => this.openPreferences());
+        this._island = new Island(this._settings, () => this.openPreferences(), this.path);
         this._music = new Music(this._island);
         this._popups = new Popups(this._island);
         const volume = new VolumePopup(this._popups), battery = new BatteryPopup(this._popups);

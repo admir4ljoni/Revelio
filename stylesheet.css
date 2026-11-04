@@ -280,28 +280,25 @@
 }
 .revelio-dropzone-icon { icon-size: 28px; color: #666; }
 
-/* Open island header: tabs on the left, settings, date and time on the right */
+/* Open island: the tab's name (coloured from island.js) and date, time and settings on the right */
 .revelio-header {
-    padding: 10px 14px 6px 14px;
-    spacing: 4px;
+    padding: 14px 16px 6px 26px;
+    spacing: 8px;
 }
-.revelio-tabs { spacing: 2px; }
-.revelio-tab {
-    padding: 6px 8px;
-    border-radius: 99px;
-    color: #8c8c8c;
-}
-.revelio-tab:hover { color: #fff; background-color: rgba(255, 255, 255, 0.08); }
-.revelio-tab:checked {
-    color: #fff;
-    background-color: rgba(255, 255, 255, 0.14);
-    padding: 6px 12px 6px 10px;
-    font-weight: bold;
-}
-.revelio-tab StIcon { icon-size: 16px; }
-.revelio-tab-box { spacing: 6px; }
-.revelio-head-date { color: #8c8c8c; font-size: 10pt; padding: 0 8px 0 6px; }
-.revelio-head-time { font-weight: bold; font-feature-settings: "tnum"; }
+.revelio-head-title { font-size: 14pt; font-weight: 800; }
+.revelio-head-date { color: #7a7a7a; font-size: 9.5pt; font-weight: bold; padding-bottom: 2px; }
+.revelio-head-time { font-size: 11pt; font-weight: 800; font-feature-settings: "tnum"; padding-bottom: 1px; }
+.revelio-head-button { padding: 5px; border-radius: 99px; color: #7a7a7a; }
+.revelio-head-button:hover { color: #fff; background-color: rgba(255, 255, 255, 0.08); }
+.revelio-head-button StIcon { icon-size: 16px; }
+
+/* Dock along the bottom: tab icons, the current one in its colour with a dot under it */
+.revelio-dock { spacing: 2px; padding: 0 0 6px 0; }
+.revelio-dock-item { padding: 6px 10px 3px 10px; border-radius: 12px; color: #6a6a6a; }
+.revelio-dock-item:hover { color: #e6e6e6; background-color: rgba(255, 255, 255, 0.06); }
+.revelio-dock-item StIcon { icon-size: 17px; }
+.revelio-dock-box { spacing: 4px; }
+.revelio-dock-dot { width: 4px; height: 4px; border-radius: 99px; }
 
 /* System and Power pages */
 .revelio-system-page { padding: 0 22px 18px 22px; spacing: 10px; }

@@ -78,7 +78,7 @@ export class Notifications {
         this.page.add_child(scroll);
         // Times are relative; refresh them when the page shows instead of on a timer.
         this.page.connectObject('notify::mapped', () => this.page.mapped && this._render(), this);
-        island.addPage(this.page, 'Notifications', 'preferences-system-notifications-symbolic');
+        island.addPage(this.page, 'Notifications');
         this._render();
         settings.connectObject('changed::notification-hide-sender', () => this._render(),
             'changed::notification-hide-text', () => this._render(), this);

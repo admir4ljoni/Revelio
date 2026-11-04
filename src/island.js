@@ -1,5 +1,6 @@
-// The island: collapsed/expanded states, animation, positioning, pages switched with a tab bar.
+// The island: collapsed/expanded states, animation, positioning, pages switched with a dock.
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
 import Pango from 'gi://Pango';
@@ -9,9 +10,15 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const ANIM_MS = 250;
 const SLIDE_PX = 40; // page switch slides the new page in this far
-const EXPANDED_HEIGHT = 236;
-// Tabs sit in this order whenever they come and go (Music appears with a player).
-const TAB_ORDER = ['Music', 'Focus', 'Tasks', 'Money', 'Today', 'Shelf', 'Notifications', 'Clipboard', 'Script', 'Record', 'System', 'Power'];
+const EXPANDED_HEIGHT = 268;
+// Dock order (tabs keep it whenever they come and go; Music appears with a player) and each tab's
+// colour: its dock icon, title and page accents (stylesheet.css repeats them per page).
+// Icons are icons/revelio-<name>-symbolic.svg, drawn by tools/icons.py.
+export const TABS = {
+    Music: '#b38cff', Focus: '#ff7a5c', Tasks: '#f5c84c', Money: '#5fd68c', Today: '#4cc9f0', Shelf: '#7b9cff',
+    Notifications: '#ff8fc7', Clipboard: '#d9b38c', Script: '#7fe3d4', Record: '#ff5c6c', System: '#b5e655', Power: '#ffb340',
+};
+const TAB_ORDER = Object.keys(TABS);
 const COLLAPSED = {clock: [180, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [240, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;
@@ -19,8 +26,9 @@ const COMPACT_CENTER = {clock: 180, minimal: 50, hidden: 50, 'status-bar': 180};
 const COMPACT_HEIGHT = 32;
 
 export class Island {
-    constructor(settings, openPrefs) {
+    constructor(settings, openPrefs, dir) {
         this._settings = settings;
+        this._dir = dir;
         this._expanded = false;
         this._paused = false;
         this._unredirectOff = false;
@@ -75,31 +83,34 @@ export class Island {
         this._bar.add_child(this._leftWing);
         this._bar.add_child(this._center);
         this._bar.add_child(this._rightWing);
-        // Open island: tab bar on top (icons; the current tab also shows its name, date, time and
-        // settings on the right), current page below.
-        this._tabBar = new St.BoxLayout({style_class: 'revelio-tabs'});
-        const prefs = new St.Button({style_class: 'revelio-tab', can_focus: true, child: new St.Icon({icon_name: 'emblem-system-symbolic'})});
+        // Open island: the tab's name (in its colour) and date over the page, time and settings on the
+        // right; the dock of tab icons along the bottom, the current one lit with a dot under it.
+        this._dock = new St.BoxLayout({style_class: 'revelio-dock', x_align: Clutter.ActorAlign.CENTER});
+        const prefs = new St.Button({style_class: 'revelio-head-button', can_focus: true, y_align: Clutter.ActorAlign.END,
+            child: new St.Icon({gicon: this.icon('settings')})});
         prefs.connect('clicked', () => {
             this._setExpanded(false);
             openPrefs();
         });
-        this._headDate = new St.Label({style_class: 'revelio-head-date', y_align: Clutter.ActorAlign.CENTER});
-        this._headTime = new St.Label({style_class: 'revelio-head-time', y_align: Clutter.ActorAlign.CENTER});
+        this._headTitle = new St.Label({style_class: 'revelio-head-title', y_align: Clutter.ActorAlign.END});
+        this._headDate = new St.Label({style_class: 'revelio-head-date', y_align: Clutter.ActorAlign.END});
+        this._headTime = new St.Label({style_class: 'revelio-head-time', y_align: Clutter.ActorAlign.END});
         const header = new St.BoxLayout({style_class: 'revelio-header', x_expand: true});
-        header.add_child(this._tabBar);
-        header.add_child(new St.Widget({x_expand: true}));
-        header.add_child(prefs);
+        header.add_child(this._headTitle);
         header.add_child(this._headDate);
+        header.add_child(new St.Widget({x_expand: true}));
         header.add_child(this._headTime);
+        header.add_child(prefs);
         this._pageBin = new St.Bin({x_expand: true, y_expand: true});
         const body = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, clip_to_allocation: true});
         body.add_child(this._pageBin);
         this._open = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_expand: true, visible: false, opacity: 0});
         this._open.add_child(header);
         this._open.add_child(body);
+        this._open.add_child(this._dock);
         this.actor.add_child(this._bar);
         this.actor.add_child(this._open);
-        this._pages = []; // {page, name, button, label}
+        this._pages = []; // {page, name, button, dot}
         this._tab = null;
 
         Main.layoutManager.addChrome(this.actor, {affectsStruts: false});
@@ -140,18 +151,24 @@ export class Island {
         this._sync();
     }
 
-    // Pages are owned (and destroyed) by the features that add them. `name` must be in TAB_ORDER.
-    addPage(page, name, icon) {
-        const label = new St.Label({text: name, visible: false, y_align: Clutter.ActorAlign.CENTER});
-        const box = new St.BoxLayout({style_class: 'revelio-tab-box'});
-        box.add_child(new St.Icon({icon_name: icon}));
-        box.add_child(label);
-        const tab = {page, name, label, button: new St.Button({style_class: 'revelio-tab', can_focus: true, child: box})};
+    // One of Revelio's own icons (icons/revelio-<name>-symbolic.svg), recoloured by the theme.
+    icon(name) {
+        return Gio.FileIcon.new(Gio.File.new_for_path(GLib.build_filenamev([this._dir, 'icons', `revelio-${name}-symbolic.svg`])));
+    }
+
+    // Pages are owned (and destroyed) by the features that add them. `name` must be in TABS.
+    addPage(page, name) {
+        const dot = new St.Widget({style_class: 'revelio-dock-dot', x_align: Clutter.ActorAlign.CENTER});
+        const box = new St.BoxLayout({style_class: 'revelio-dock-box', orientation: Clutter.Orientation.VERTICAL});
+        box.add_child(new St.Icon({gicon: this.icon(name.toLowerCase())}));
+        box.add_child(dot);
+        const tab = {page, name, dot, button: new St.Button({style_class: 'revelio-dock-item', can_focus: true, child: box,
+            accessible_name: name})};
         tab.button.connect('clicked', () => this._showPage(tab));
         const rank = n => TAB_ORDER.indexOf(n);
         const i = this._pages.findIndex(t => rank(t.name) > rank(name));
         this._pages.splice(i < 0 ? this._pages.length : i, 0, tab);
-        this._tabBar.insert_child_at_index(tab.button, this._pages.indexOf(tab));
+        this._dock.insert_child_at_index(tab.button, this._pages.indexOf(tab));
         if (!this._tab)
             this._showPage(tab);
     }
@@ -385,12 +402,16 @@ export class Island {
         const prev = this._tab;
         this._tab = tab;
         this._pageBin.set_child(tab?.page ?? null);
+        this._headTitle.text = tab?.name ?? '';
+        this._headTitle.style = tab ? `color: ${TABS[tab.name]};` : null;
         for (const t of this._pages) {
-            t.label.visible = t === tab;
-            if (t === tab)
+            const on = t === tab;
+            if (on)
                 t.button.add_style_pseudo_class('checked');
             else
                 t.button.remove_style_pseudo_class('checked');
+            t.button.style = on ? `color: ${TABS[t.name]};` : null;
+            t.dot.style = on ? `background-color: ${TABS[t.name]};` : null;
         }
         const bin = this._pageBin;
         bin.remove_all_transitions();

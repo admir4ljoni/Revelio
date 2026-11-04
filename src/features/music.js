@@ -230,7 +230,7 @@ export class Music {
         const best = live.sort((a, b) => rank(b) - rank(a))[0] ?? null;
         const changed = best !== this._player;
         if (changed && !this._player)
-            this._island.addPage(this.page, 'Music', 'audio-x-generic-symbolic');
+            this._island.addPage(this.page, 'Music');
         this._player = best;
         if (!best) {
             this._island.showCompact(this._compact, false);

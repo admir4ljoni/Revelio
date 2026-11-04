@@ -107,7 +107,7 @@ export class Tasks {
         }
         this._compact = {left, right, page: this.page, priority: 10};
 
-        island.addPage(this.page, 'Tasks', 'checkbox-checked-symbolic');
+        island.addPage(this.page, 'Tasks');
         this._render();
 
         // The window saves to the same file (an atomic rename, hence watching the directory).

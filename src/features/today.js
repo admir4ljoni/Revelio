@@ -57,7 +57,7 @@ export class Today {
                 this._offset = 0; // reopen on today
             this._render();
         }, this);
-        island.addPage(this.page, 'Today', 'x-office-calendar-symbolic');
+        island.addPage(this.page, 'Today');
     }
 
     _render() {

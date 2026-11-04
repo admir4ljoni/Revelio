@@ -4,7 +4,7 @@
 # ponytail: fixed 12 s boot wait; poll the D-Bus name if it gets flaky.
 set -e
 cd "$(dirname "$0")"
-gnome-extensions pack --force --extra-source=src . 2>/dev/null || gnome-extensions pack --force .
+gnome-extensions pack --force --extra-source=src --extra-source=icons . 2>/dev/null || gnome-extensions pack --force .
 T=$(mktemp -d /tmp/rv.XXXX)
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/cfg" "$T/data/gnome-shell/extensions/revelio@midra" "$T/run" && chmod 700 "$T/run"
