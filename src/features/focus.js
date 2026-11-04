@@ -4,10 +4,12 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as P from '../lib/pomodoro.js';
+import {hexRgb} from '../lib/color.js';
+import {TABS} from '../island.js';
 
 const NAMES = {focus: 'Focus', break: 'Break', 'long-break': 'Long break'};
 const SHORT = {focus: 'Focus', break: 'Short', 'long-break': 'Long'};
-const RING = {focus: [1, 0.62, 0.26], break: [0.18, 0.76, 0.49], 'long-break': [0.47, 0.68, 0.93]};
+const RING = {focus: hexRgb(TABS.Focus).map(v => v / 255), break: [0.18, 0.76, 0.49], 'long-break': [0.47, 0.68, 0.93]};
 
 const fmt = ms => {
     const s = Math.ceil(ms / 1000);
@@ -122,7 +124,7 @@ export class Focus {
         const right = new St.Bin({child: this._compactTime, x_expand: true, x_align: Clutter.ActorAlign.CENTER});
         this._compact = {left, right, page: this.page, priority: 2};
 
-        island.addPage(this.page, 'Focus', 'alarm-symbolic');
+        island.addPage(this.page, 'Focus');
         const sync = () => this._sync();
         settings.connectObject('changed::focus-minutes', sync, 'changed::break-minutes', sync,
             'changed::long-break-minutes', sync, this);

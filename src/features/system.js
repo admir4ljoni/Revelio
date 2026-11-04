@@ -6,7 +6,8 @@ import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 import * as S from '../lib/stats.js';
-import {heat} from '../lib/color.js';
+import {heat, hexRgb} from '../lib/color.js';
+import {TABS} from '../island.js';
 
 const HISTORY = 60; // samples, one a second
 const APPS = 4;
@@ -41,14 +42,11 @@ function listDir(path) {
 const fmtRate = b => (b < 1000 ? `${Math.round(b)} B/s` : `${GLib.format_size(b)}/s`);
 const pct = f => `${Math.round(f * 100)}%`;
 
-// The system accent color as [r, g, b] 0..255 (cheap to read, so it's read per sample, no signal).
-const accentRgb = () => {
-    const [c] = St.ThemeContext.get_for_stage(global.stage).get_accent_color();
-    return c ? [c.red, c.green, c.blue] : [120, 174, 237];
-};
+// The System tab's colour as [r, g, b] 0..255.
+const accentRgb = () => hexRgb(TABS.System);
 
 // A stat card: caption, value and a level bar (the fill is scaled, so no relayout per sample).
-// The bar is the accent color (CSS); a `hot` one (high is bad) turns yellow then red as it fills.
+// The bar is the tab's colour; a `hot` one (high is bad) turns yellow then red as it fills.
 function card(caption, hot = false) {
     const value = new St.Label({style_class: 'revelio-card-value'});
     const fill = new St.Widget({style_class: 'revelio-card-fill', x_expand: true, pivot_point: new Graphene.Point({x: 0, y: 0})});
@@ -166,8 +164,8 @@ export class System {
 
         for (const page of [this._sysPage, this._powerPage])
             page.connectObject('notify::mapped', () => this._syncTimer(), this);
-        island.addPage(this._sysPage, 'System', 'power-profile-balanced-symbolic');
-        island.addPage(this._powerPage, 'Power', 'battery-full-charged-symbolic');
+        island.addPage(this._sysPage, 'System');
+        island.addPage(this._powerPage, 'Power');
     }
 
     _syncTimer() {

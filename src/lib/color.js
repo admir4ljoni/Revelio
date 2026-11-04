@@ -39,3 +39,6 @@ export function heat(rgb, level) {
     const l = Math.max(0, Math.min(1, level));
     return l <= 0.5 ? rgb : l <= 0.75 ? mix(rgb, YELLOW, (l - 0.5) * 4) : mix(YELLOW, RED, (l - 0.75) * 4);
 }
+
+// '#rrggbb' as [r, g, b] 0..255.
+export const hexRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));

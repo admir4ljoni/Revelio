@@ -14,8 +14,10 @@ import * as store from '../lib/store.js';
 import * as M from '../lib/money.js';
 import {workbook} from '../lib/xlsx.js';
 import {paintRing} from './focus.js';
+import {hexRgb} from '../lib/color.js';
+import {TABS} from '../island.js';
 
-const RING = {ok: [0.47, 0.68, 0.93], ahead: [1, 0.62, 0.26], over: [0.88, 0.27, 0.27]};
+const RING = {ok: hexRgb(TABS.Money).map(v => v / 255), ahead: [1, 0.62, 0.26], over: [0.88, 0.27, 0.27]};
 const FORMS = {
     in: {title: 'Add money', hint: 'Amount and note, e.g. 5jt salary', save: 'Add'},
     out: {title: 'Spend', hint: 'Amount and note, e.g. 25k lunch #food', save: 'Save'},
@@ -85,7 +87,7 @@ export class Money {
             this.page.add_child(a);
         // Recompute when shown: the day (and so the allowance and pace) may have changed. No timers.
         this.page.connect('notify::mapped', () => this.page.mapped && this._render());
-        island.addPage(this.page, 'Money', 'accessories-calculator-symbolic');
+        island.addPage(this.page, 'Money');
         this._render();
     }
 

@@ -128,7 +128,7 @@
 .revelio-island:drop { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6); }
 
 .revelio-dim { color: #888; }
-.revelio-accent { color: #78aeed; }
+.revelio-accent { color: #f5c84c; } /* Tasks */
 
 /* Shared: pill buttons, segmented chips, rows */
 .revelio-row { spacing: 8px; }
@@ -143,8 +143,10 @@
 .revelio-pill:insensitive { color: #5c5c5c; background-color: rgba(255, 255, 255, 0.04); }
 .revelio-pill StIcon { icon-size: 14px; }
 .revelio-pill-box { spacing: 6px; }
-.revelio-pill-accent { background-color: rgba(255, 159, 67, 0.22); color: #ffb470; }
-.revelio-pill-accent:hover { background-color: rgba(255, 159, 67, 0.34); }
+.revelio-pill-accent { background-color: rgba(255, 122, 92, 0.22); color: #ff9a82; } /* Focus */
+.revelio-pill-accent:hover { background-color: rgba(255, 122, 92, 0.34); }
+.revelio-money-page .revelio-pill-accent { background-color: rgba(95, 214, 140, 0.2); color: #7fe3a5; }
+.revelio-money-page .revelio-pill-accent:hover { background-color: rgba(95, 214, 140, 0.32); }
 .revelio-segmented {
     padding: 3px;
     spacing: 2px;
@@ -167,7 +169,7 @@
 .revelio-focus-side { spacing: 14px; }
 .revelio-focus-dots { spacing: 5px; padding-left: 4px; }
 .revelio-focus-dot { width: 8px; height: 8px; border-radius: 99px; background-color: rgba(255, 255, 255, 0.15); }
-.revelio-focus-dot:checked { background-color: #ff9f43; }
+.revelio-focus-dot:checked { background-color: #ff7a5c; }
 
 /* Tasks page */
 .revelio-tasks-page {
@@ -184,7 +186,8 @@
     selected-color: #000;
     selection-background-color: #fff;
 }
-.revelio-entry:focus { border-color: #78aeed; }
+.revelio-entry:focus { border-color: #f5c84c; }
+.revelio-money-page .revelio-entry:focus { border-color: #5fd68c; }
 .revelio-entry-icon { icon-size: 14px; color: #999; padding-right: 4px; }
 .revelio-list-row { border-radius: 10px; padding: 0 6px; }
 .revelio-list-row:hover { background-color: rgba(255, 255, 255, 0.06); }
@@ -203,8 +206,8 @@
 .revelio-pill-small StIcon { icon-size: 13px; }
 .revelio-chip { padding: 3px 10px; font-size: 9pt; }
 .revelio-tag {
-    color: #78aeed;
-    background-color: rgba(120, 174, 237, 0.14);
+    color: #f5c84c;
+    background-color: rgba(245, 200, 76, 0.14);
     border-radius: 99px;
     padding: 1px 8px;
     font-size: 8pt;
@@ -224,7 +227,7 @@
     spacing: 26px;
 }
 .revelio-today-date { width: 120px; }
-.revelio-today-weekday { color: #78aeed; font-weight: bold; font-size: 9pt; }
+.revelio-today-weekday { color: #4cc9f0; font-weight: bold; font-size: 9pt; }
 .revelio-today-day {
     font-size: 40pt;
     font-weight: 800;
@@ -240,7 +243,7 @@
     border-radius: 12px;
     background-color: rgba(255, 255, 255, 0.07);
 }
-.revelio-event-bar { width: 3px; border-radius: 2px; background-color: #78aeed; }
+.revelio-event-bar { width: 3px; border-radius: 2px; background-color: #4cc9f0; }
 .revelio-event-title { font-size: 10pt; font-weight: bold; }
 .revelio-cal-head, .revelio-cal-day {
     font-size: 9pt;
@@ -253,14 +256,14 @@
 .revelio-cal-day { padding-top: 2px; }
 .revelio-cal-title { font-size: 9pt; font-weight: bold; color: #ccc; border-radius: 99px; padding: 2px 8px; }
 .revelio-cal-title:hover { background-color: rgba(255, 255, 255, 0.08); }
-.revelio-cal-title:away { color: #78aeed; }
+.revelio-cal-title:away { color: #4cc9f0; }
 .revelio-cal-nav { color: #999; }
 .revelio-cal-nav StIcon { icon-size: 14px; }
 .revelio-cal-day:past { color: #444; }
 .revelio-cal-day:other-month { color: #888; }
-.revelio-cal-event { color: #78aeed; font-weight: bold; }
+.revelio-cal-event { color: #4cc9f0; font-weight: bold; }
 .revelio-cal-day:today {
-    background-color: #78aeed;
+    background-color: #4cc9f0;
     color: #000;
     border-radius: 99px;
     font-weight: bold;
@@ -312,7 +315,7 @@
 .revelio-card-caption { color: #999; font-size: 8.5pt; }
 .revelio-card-value { font-weight: bold; font-size: 11pt; font-feature-settings: "tnum"; }
 .revelio-card-track { height: 3px; border-radius: 2px; background-color: rgba(255, 255, 255, 0.1); margin-top: 4px; }
-.revelio-card-fill { height: 3px; border-radius: 2px; background-color: -st-accent-color; }
+.revelio-card-fill { height: 3px; border-radius: 2px; background-color: #b5e655; }
 .revelio-sys-bottom { spacing: 22px; }
 .revelio-sys-details { width: 190px; }
 .revelio-sys-graph { width: 200px; }
@@ -385,7 +388,7 @@
 .revelio-money-eye { icon-size: 16px; color: #999; }
 .revelio-money-big-button:hover .revelio-money-eye, .revelio-money-big-button:focus .revelio-money-eye { color: #fff; }
 .revelio-money-line { font-size: 9pt; font-feature-settings: "tnum"; }
-.revelio-money-tip { font-size: 8.5pt; color: #ffb470; padding-top: 6px; }
+.revelio-money-tip { font-size: 8.5pt; color: #7fe3a5; padding-top: 6px; }
 .revelio-money-row { padding: 2px 4px 2px 8px; spacing: 6px; }
 .revelio-money-what { font-size: 9pt; font-weight: bold; }
 .revelio-money-amount { font-size: 9pt; font-weight: bold; font-feature-settings: "tnum"; }

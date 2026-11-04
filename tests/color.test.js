@@ -1,5 +1,5 @@
 // gjs -m tests/color.test.js
-import {accent, heat} from '../src/lib/color.js';
+import {accent, heat, hexRgb} from '../src/lib/color.js';
 
 const eq = (a, b) => {
     if (JSON.stringify(a) !== JSON.stringify(b))
@@ -20,3 +20,4 @@ eq(heat([0, 100, 200], 0.3), [0, 100, 200]);
 eq(heat([0, 100, 200], 0.75), [245, 194, 17]);
 eq(heat([0, 100, 200], 2), [224, 27, 36]);
 eq(heat([0, 100, 200], 0.625), [123, 147, 109]);
+eq(hexRgb('#ff7a5c'), [255, 122, 92]);
