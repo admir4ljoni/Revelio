@@ -2,6 +2,8 @@
 
 A Dynamic Island for GNOME.
 
+![The open island on the Music tab: album art, playback controls and synced lyrics](docs/music.png)
+
 Revelio puts a small black notch at the top of your screen. Closed, it shows the time, or what's
 playing. Hover over it and it opens into a row of tabs for music, focus, tasks, money, calendar and
 system stats. Volume, battery, headphones and notifications pop up from it.
