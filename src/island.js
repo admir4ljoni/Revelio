@@ -11,10 +11,10 @@ const SLIDE_PX = 40; // page switch slides the new page in this far
 const EXPANDED_HEIGHT = 236;
 // Tabs sit in this order whenever they come and go (Music appears with a player).
 const TAB_ORDER = ['Music', 'Focus', 'Tasks', 'Money', 'Today', 'Shelf', 'Notifications', 'Clipboard', 'Script', 'Record', 'System', 'Power'];
-const COLLAPSED = {clock: [120, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [230, 32]};
+const COLLAPSED = {clock: [220, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [300, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;
-const COMPACT_CENTER = {clock: 120, minimal: 50, hidden: 50, 'status-bar': 120};
+const COMPACT_CENTER = {clock: 220, minimal: 50, hidden: 50, 'status-bar': 220};
 const COMPACT_HEIGHT = 32;
 
 export class Island {
@@ -237,8 +237,9 @@ export class Island {
             return;
         const now = GLib.DateTime.new_now_local();
         const time = now.format(this._settings.get_boolean('clock-24h') ? '%H:%M' : '%-l:%M %p');
-        const withDate = this._look() === 'status-bar' && !(this._popup ?? this._compact);
-        this._clockLabel.text = withDate ? `${now.format('%a %-d %b')}  ${time}` : time;
+        // The status bar has room for the weekday too.
+        const weekday = this._look() === 'status-bar' && !(this._popup ?? this._compact);
+        this._clockLabel.text = `${now.format(weekday ? '%a %-d %b %Y' : '%-d %b %Y')}  ${time}`;
         this._headTime.text = time;
         this._headDate.text = now.format('%a %-d %b');
     }
