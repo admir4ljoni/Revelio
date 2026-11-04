@@ -2,11 +2,9 @@
 
 A Dynamic Island for GNOME.
 
-![The open island on the Music tab: album art, playback controls, synced lyrics and the tab dock](docs/music.png)
-
 Revelio puts a small black notch at the top of your screen. Closed, it shows the time, or what's
-playing. Hover over it and it opens into a row of tabs for music, focus, tasks, money, calendar and
-system stats. Volume, battery, headphones and notifications pop up from it.
+playing. Hover over it and it opens into tabs for music, focus, tasks, money, calendar and system stats,
+switched from a dock along the bottom. Volume, battery, headphones and notifications pop up from it.
 
 It runs inside GNOME Shell as an extension, so there's no extra app in the background. It reacts to
 events instead of polling, and it pauses while the screen is locked or off.
@@ -15,29 +13,70 @@ Requires **GNOME 50** (Ubuntu 26.04 LTS, Fedora 44 and other GNOME 50 distributi
 
 ## Features
 
-**Music**
+### Music
+
+![Music tab: cover art, track, seek bar and playback controls](docs/music.png)
+
 - Controls for any MPRIS player (Spotify, Firefox, Rhythmbox, mpv…), with a seek bar and album art
 - Synced lyrics from [LRCLIB](https://lrclib.net), with the current line highlighted beside the player
 - On the closed island: the track title, small playback controls and animated bars
 
-**Tabs**
-- **Focus**: a Pomodoro timer whose countdown stays on the closed island
-- **Tasks**: a to-do list where `#tag` sets a category and `@tomorrow 9:00` sets a deadline. Overdue tasks raise an alert, and the list also opens in its own window
-- **Money**: a monthly budget split into cash and e-wallet. Set money aside for bills or savings goals, see what's left for today, and export a report to `~/Documents/Revelio/Money.xlsx`
-- **Today**: a calendar with your events from GNOME Calendar and Evolution
-- **Shelf**: drop files on the island to keep them close
-- **System**: CPU, memory, drives, network, battery, GPU, top apps, and a power page showing how much each part draws
+### Focus
 
-**Pop-ups**
+![Focus tab: a running Pomodoro countdown with its progress ring](docs/focus.png)
+
+A Pomodoro timer with focus, short and long breaks. The countdown stays on the closed island.
+
+### Tasks
+
+![Tasks tab: tasks with categories and deadlines, and filter chips](docs/tasks.png)
+
+A to-do list where `#tag` sets a category and `@tomorrow 9:00` sets a deadline. Overdue tasks raise
+an alert, and the list also opens in its own window.
+
+### Money
+
+![Money tab: rings for the month, cash and e-wallet, and what's left for today](docs/money.png)
+
+A monthly budget split into cash and e-wallet. Set money aside for bills or savings goals, see what's
+left for today, and export a report to `~/Documents/Revelio/Money.xlsx`.
+
+### Today
+
+![Today tab: the date, the month's calendar and upcoming events](docs/today.png)
+
+The month at a glance, with your events from GNOME Calendar and Evolution.
+
+### Shelf
+
+![Shelf tab: files dropped on the island](docs/shelf.png)
+
+Drop files on the island to keep them close.
+
+### System and Power
+
+![System tab: CPU, GPU, memory, drives, network, battery, history and top apps](docs/system.png)
+
+![Power tab: total power draw split into parts](docs/power.png)
+
+CPU, memory, drives, network, battery, GPU, a one-minute history and the busiest apps, plus a power
+page showing how much each part draws.
+
+### Pop-ups
+
 - Volume, charging and battery level, and Bluetooth headphones with their battery level
 
-**Add-ons** (off by default, switch on in settings)
+### Add-ons
+
+Off by default; switch them on in settings.
+
 - Notifications from other apps, with a history tab and privacy switches
 - Clipboard history
 - A teleprompter for reading scripts
 - A shortcut to GNOME's screen recorder
 
-**Settings**
+### Settings
+
 - Hover or click to open, open and close delays, width
 - Clock, minimal, hidden-until-hover or status-bar look when closed
 - Which monitor it appears on, and whether it hides over full-screen apps
@@ -58,7 +97,7 @@ Requires **GNOME 50** (Ubuntu 26.04 LTS, Fedora 44 and other GNOME 50 distributi
    gnome-extensions enable revelio@midra
    ```
 
-Settings open with `gnome-extensions prefs revelio@midra`, or from the gear on the open island.
+Settings open with `gnome-extensions prefs revelio@midra`, or from the settings button on the open island.
 
 ### From source
 
