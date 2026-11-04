@@ -167,7 +167,15 @@ export class Music {
 
         const info = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'revelio-track-info',
             x_expand: true, y_align: Clutter.ActorAlign.CENTER});
-        [this._title, this._artist, this._source, this._slider, times, this._pageControls.box].forEach(a => info.add_child(a));
+        // Pin: keep the island open on this tab after the pointer leaves (sing along to lyrics).
+        this._pin = new St.Button({style_class: 'revelio-media-button revelio-pin', toggle_mode: true, can_focus: true,
+            child: new St.Icon({icon_name: 'view-pin-symbolic'})});
+        this._pin.connectObject('notify::checked', () => this._island.keepOpen(this._pin.checked ? this.page : null), this);
+        this._source.x_expand = true;
+        const sourceRow = new St.BoxLayout();
+        sourceRow.add_child(this._source);
+        sourceRow.add_child(this._pin);
+        [this._title, this._artist, sourceRow, this._slider, times, this._pageControls.box].forEach(a => info.add_child(a));
         this.page = new St.BoxLayout({style_class: 'revelio-music-page', x_expand: true});
         this.page.add_child(artFrame);
         this.page.add_child(info);
@@ -566,6 +574,8 @@ export class Music {
             this._island.removePage(this.page);
         }
         this._player = null;
+        if (this._pin.checked)
+            this._island.keepOpen(null);
         this._lyrics.destroy(); // before the page, which holds its line label
         for (const a of [this._compact.left, this._compact.right, ...this._beats, this.page])
             a.destroy();

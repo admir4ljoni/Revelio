@@ -25,6 +25,7 @@ export class Island {
         this._paused = false;
         this._unredirectOff = false;
         this._timeoutId = 0;
+        this._keepOpen = null;
         this._compacts = new Set();
         this._compact = null;
         this._popup = null;
@@ -192,6 +193,12 @@ export class Island {
         this._setExpanded(false);
     }
 
+    // While `page` is the shown tab, leaving the island doesn't close it (null = off).
+    keepOpen(page) {
+        this._keepOpen = page;
+        this._onHover();
+    }
+
     // Typing into the island (an entry): Wayland keys go to the focused window unless the Shell
     // takes a modal grab. Held until the island closes (pointer leaves, click outside, Escape).
     grabKeys(actor) {
@@ -322,7 +329,7 @@ export class Island {
     _onHover() {
         this._clearTimeout();
         if (this._expanded) {
-            if (!this.actor.hover)
+            if (!this.actor.hover && !(this._keepOpen && this._tab?.page === this._keepOpen))
                 this._delay('close-delay', false);
             return;
         }
