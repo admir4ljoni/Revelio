@@ -20,6 +20,9 @@ const list = [{text: 'a', tag: 'work'}, {text: 'b'}, {text: 'c', tag: 'home'}, {
 eq(T.tags(list), ['home', 'work']);
 eq(T.visible(list, 'work').map(t => t.text), ['a', 'd']);
 eq(T.visible(list, null).length, 4);
+const doneList = [{text: 'a', tag: 'work', done: true}, {text: 'b', done: true}, {text: 'c', tag: 'home', done: true}, {text: 'd', tag: 'work'}];
+eq(T.clearDone(doneList, 'work').map(t => t.text), ['b', 'c', 'd']); // only the category's done ones go
+eq(T.clearDone(doneList, null).map(t => t.text), ['d']);
 
 // Deadlines (local time).
 const now = new Date(2026, 10, 2, 10, 0).getTime();

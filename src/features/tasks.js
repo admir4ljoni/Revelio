@@ -61,10 +61,7 @@ export class Tasks {
         this._count = new St.Label({style_class: 'revelio-dim', x_expand: true, y_align: Clutter.ActorAlign.CENTER});
         this._count.clutter_text.x_align = Clutter.ActorAlign.END; // sits after the chips
         this._clearDone = new St.Button({style_class: 'revelio-pill revelio-pill-small', label: 'Clear done', can_focus: true});
-        this._clearDone.connect('clicked', () => {
-            const shown = T.visible(this._tasks, this._filter);
-            this._change(this._tasks.filter(t => !(t.done && shown.includes(t))));
-        });
+        this._clearDone.connect('clicked', () => this._change(T.clearDone(this._tasks, this._filter)));
         const popOut = new St.Button({style_class: 'revelio-pill revelio-pill-small', can_focus: true,
             child: new St.Icon({icon_name: 'window-new-symbolic'})});
         popOut.connect('clicked', () => this._openWindow());

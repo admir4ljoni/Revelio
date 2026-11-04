@@ -73,6 +73,12 @@ export const overdue = (t, now = Date.now()) => typeof t.due === 'number' && !t.
 export const visible = (tasks, tag, now = Date.now()) =>
     (tag === OVERDUE ? tasks.filter(t => overdue(t, now)) : tag ? tasks.filter(t => t.tag === tag) : tasks);
 
+// Clear done: drops the done tasks in the view (`tag`), keeping the other categories' done ones.
+export const clearDone = (tasks, tag) => {
+    const shown = new Set(visible(tasks, tag));
+    return tasks.filter(t => !(t.done && shown.has(t)));
+};
+
 // Overdue and not answered yet: the alerts to show, oldest deadline first.
 export const alerts = (tasks, now = Date.now()) =>
     tasks.filter(t => overdue(t, now) && t.reason === undefined).sort((a, b) => a.due - b.due);

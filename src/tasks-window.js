@@ -30,10 +30,7 @@ class TasksWindow {
         this._empty = new Adw.StatusPage({icon_name: 'checkbox-checked-symbolic', title: 'Nothing to do', vexpand: true});
         this._count = new Gtk.Label({css_classes: ['dim-label'], hexpand: true, xalign: 0});
         this._clearDone = new Gtk.Button({label: 'Clear done', css_classes: ['pill']});
-        this._clearDone.connect('clicked', () => {
-            const shown = T.visible(this._tasks, this._filter);
-            this._change(this._tasks.filter(t => !(t.done && shown.includes(t))));
-        });
+        this._clearDone.connect('clicked', () => this._change(T.clearDone(this._tasks, this._filter)));
         const footer = new Gtk.Box({spacing: 12});
         footer.append(this._count);
         footer.append(this._clearDone);
