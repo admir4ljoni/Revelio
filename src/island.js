@@ -11,10 +11,10 @@ const SLIDE_PX = 40; // page switch slides the new page in this far
 const EXPANDED_HEIGHT = 236;
 // Tabs sit in this order whenever they come and go (Music appears with a player).
 const TAB_ORDER = ['Music', 'Focus', 'Tasks', 'Money', 'Today', 'Shelf', 'Notifications', 'Clipboard', 'Script', 'Record', 'System', 'Power'];
-const COLLAPSED = {clock: [220, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [300, 32]};
+const COLLAPSED = {clock: [210, 32], minimal: [110, 12], hidden: [110, 12], 'status-bar': [270, 32]};
 // Closed island with a feature's compact view: two equal wings keep the clock centered.
 const WING = 150;
-const COMPACT_CENTER = {clock: 220, minimal: 50, hidden: 50, 'status-bar': 220};
+const COMPACT_CENTER = {clock: 210, minimal: 50, hidden: 50, 'status-bar': 210};
 const COMPACT_HEIGHT = 32;
 
 export class Island {
@@ -39,7 +39,22 @@ export class Island {
         });
         // Closed bar: [left wing][beat ⅃ clock L beat][right wing]. Only the center opens on hover,
         // so the wings (song text, media buttons) stay usable.
-        this._clockLabel = new St.Label({style_class: 'revelio-clock', y_align: Clutter.ActorAlign.CENTER});
+        // Clock: stacked date (WED over 4 NOV 2026), a hairline, then the time (with a small AM/PM).
+        const label = (style, align = Clutter.ActorAlign.CENTER) => new St.Label({style_class: style, y_align: align});
+        this._weekday = label('revelio-clock-weekday');
+        this._date = label('revelio-clock-date');
+        this._time = label('revelio-clock-time');
+        this._ampm = label('revelio-clock-ampm', Clutter.ActorAlign.END);
+        const dateBox = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER});
+        dateBox.add_child(this._weekday);
+        dateBox.add_child(this._date);
+        const timeBox = new St.BoxLayout({style_class: 'revelio-clock-timebox', y_align: Clutter.ActorAlign.CENTER});
+        timeBox.add_child(this._time);
+        timeBox.add_child(this._ampm);
+        this._clockLabel = new St.BoxLayout({style_class: 'revelio-clock-box', y_align: Clutter.ActorAlign.CENTER});
+        this._clockLabel.add_child(dateBox);
+        this._clockLabel.add_child(new St.Widget({style_class: 'revelio-clock-rule', y_align: Clutter.ActorAlign.CENTER}));
+        this._clockLabel.add_child(timeBox);
         this._beatLeft = new St.Bin({y_align: Clutter.ActorAlign.CENTER});
         this._beatRight = new St.Bin({y_align: Clutter.ActorAlign.CENTER});
         this._center = new St.BoxLayout({
@@ -236,10 +251,13 @@ export class Island {
         if (this._paused)
             return;
         const now = GLib.DateTime.new_now_local();
-        const time = now.format(this._settings.get_boolean('clock-24h') ? '%H:%M' : '%-l:%M %p');
-        // The status bar has room for the weekday too.
-        const weekday = this._look() === 'status-bar' && !(this._popup ?? this._compact);
-        this._clockLabel.text = `${now.format(weekday ? '%a %-d %b %Y' : '%-d %b %Y')}  ${time}`;
+        const h24 = this._settings.get_boolean('clock-24h');
+        const time = now.format(h24 ? '%H:%M' : '%-l:%M %p');
+        this._weekday.text = now.format('%a').toUpperCase();
+        this._date.text = now.format('%-d %b %Y').toUpperCase();
+        this._time.text = now.format(h24 ? '%H:%M' : '%-l:%M');
+        this._ampm.text = h24 ? '' : now.format('%p');
+        this._ampm.visible = !h24;
         this._headTime.text = time;
         this._headDate.text = now.format('%a %-d %b');
     }

@@ -15,6 +15,13 @@
     font-weight: bold;
     font-feature-settings: "tnum";
 }
+.revelio-clock-box { spacing: 8px; }
+.revelio-clock-timebox { spacing: 2px; }
+.revelio-clock-weekday { font-size: 6.5pt; font-weight: bold; color: #8a8a8a; letter-spacing: 1px; }
+.revelio-clock-date { font-size: 7pt; font-weight: bold; color: #d0d0d0; letter-spacing: 0.5px; font-feature-settings: "tnum"; }
+.revelio-clock-rule { width: 1px; height: 18px; background-color: rgba(255, 255, 255, 0.22); }
+.revelio-clock-time { font-size: 12pt; font-weight: 800; font-feature-settings: "tnum"; }
+.revelio-clock-ampm { font-size: 7pt; font-weight: bold; color: #8a8a8a; padding-bottom: 2px; }
 
 /* Closed island: [song marquee][beat clock beat][media buttons] */
 .revelio-center { spacing: 6px; }
