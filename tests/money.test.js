@@ -93,4 +93,41 @@ eq(sheets[0].charts[1].series[0].values.slice(0, 3), [60000, 400000, null]); // 
 eq(sheets[0].cells.filter(c => /^B\d+$/.test(c[0]) && c[1] === 'Spent').length, 3);
 eq(sheets[0].cells.some(c => c[1] === 'Salary'), false); // the 28 Oct salary (no note here) is listed under November
 eq(sheets[0].cells.filter(c => c[1] === 'Income').length, 2); // KPI caption + the salary row
+// Set-asides: 200k for transport out of a 3jt November (30 days). 50k of it spent today.
+const plan = [{tag: 'transport', amount: 200000}];
+const sa = [
+    {kind: 'in', amount: 3000000, wallet: 'cash', date: '2026-11-01'},
+    {kind: 'out', amount: 50000, wallet: 'cash', date: '2026-11-02', category: 'transport'},
+    {kind: 'out', amount: 20000, wallet: 'cash', date: '2026-11-02', category: 'food'},
+];
+const s1 = M.today(sa, '2026-11-02', plan);
+eq([s1.reserved, s1.free, s1.daily, s1.pool, s1.spentToday], [150000, 2780000, 20000, 2800000, 20000]);
+eq(s1.perDay, 2800000 / 29); // the reserve is held back; transport today isn't day-to-day
+eq(M.today(sa, '2026-11-02').perDay, (2930000 + 70000) / 29); // without the plan, as before
+// Past the set-aside: the 50k over is day-to-day (and today's spending).
+const over = [...sa, {kind: 'out', amount: 200000, wallet: 'cash', date: '2026-11-02', category: 'transport'}];
+const s2 = M.today(over, '2026-11-02', plan);
+eq([s2.reserved, s2.daily, s2.spentToday], [0, 70000, 70000]);
+eq(M.tips(over, '2026-11-02', plan).includes('Transport is Rp 50.000 past its Rp 200.000 set-aside.'), true);
+eq(M.tips(sa, '2026-11-02', [{tag: 'fun', amount: 5000000}])[0], 'Set-asides need Rp 2.070.000 more than is left this month.');
+
+// Pockets: 500k put in from cash, 100k taken back to the e-wallet; out of the month's money meanwhile.
+const pk = [...sa,
+    {kind: 'save', amount: 500000, wallet: 'cash', date: '2026-11-02', pocket: 'p1', note: 'laptop'},
+    {kind: 'withdraw', amount: 100000, wallet: 'ewallet', date: '2026-11-03', pocket: 'p1', note: 'laptop'}];
+eq(M.clean(pk).length, 5);
+eq(M.clean([{kind: 'save', amount: 1, wallet: 'cash', date: '2026-11-02'}]), []); // no pocket
+eq(M.pocketBalance(pk, 'p1'), 400000);
+eq(M.pocketBalance(pk), 400000);
+eq(M.balances(pk), {cash: 2430000, ewallet: 100000});
+const ps = M.summary(pk, '2026-11');
+eq([ps.saved, ps.budget, ps.left], [400000, 2600000, 2530000]);
+eq(M.summary(pk, '2026-12').carry, 2530000); // pocket money stays out of later months
+const pocket = {id: 'p1', name: 'laptop', target: 1000000, due: '2027-01-15'};
+eq(M.pocketPlan(pk, pocket, '2026-11-03'), {saved: 400000, need: 600000, used: 0.4, perMonth: 200000}); // Nov, Dec, Jan
+eq(M.pocketPlan(pk, {...pocket, due: undefined}, '2026-11-03').perMonth, null);
+eq(M.parseEntry('laptop 5jt @2027-06-01'), {amount: 5000000, note: 'laptop', tag: null, due: '2027-06-01'});
+eq(M.cleanPlan({setAsides: [{tag: 'transport', amount: 200000}, {tag: 'x', amount: -1}], pockets: [pocket, {id: 2}]}),
+    {setAsides: [{tag: 'transport', amount: 200000}], pockets: [pocket]});
+eq(M.cleanPlan(null), {setAsides: [], pockets: []});
 print('money: ok');

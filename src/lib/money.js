@@ -1,9 +1,14 @@
 // Money tracking logic for the Money tab and its Excel report. Pure: no Shell imports.
-// An entry is {kind, amount, wallet, date, note?, category?, month?, to?}:
-//   kind 'in' (money added), 'out' (spent) or 'move' (between wallets, `wallet` -> `to`)
+// An entry is {kind, amount, wallet, date, note?, category?, month?, to?, pocket?}:
+//   kind 'in' (money added), 'out' (spent), 'move' (between wallets, `wallet` -> `to`),
+//   'save' (wallet -> pocket) or 'withdraw' (pocket -> wallet); `pocket` is the pocket's id
 //   amount in whole rupiah; wallet 'cash' | 'ewallet'; date 'YYYY-MM-DD'
 //   category (out): lower-case tag; month (in): 'YYYY-MM' the money is budgeted for.
 // Months run from the 1st. Whatever a month doesn't spend (or overspends) carries into the next.
+// The plan (money-plan.json) is {setAsides: [{tag, amount}], pockets: [{id, name, target, due?}]}:
+// a set-aside reserves `amount` of every month's money for one category; a pocket is a savings jar
+// with a target (and a 'YYYY-MM-DD' date to use it by). Money in a pocket is out of the wallets and
+// out of the month's money until it's taken back.
 import {parse as parseTag} from './tasks.js';
 
 export const WALLETS = {cash: 'Cash', ewallet: 'E-wallet'};
@@ -66,19 +71,50 @@ export function parseAmount(s) {
 
 // "25k lunch #food" -> {amount: 25000, note: 'lunch', tag: 'food'}. The first word that reads as an
 // amount is the amount; amount is null when there's none.
+// `due` ('YYYY-MM-DD', only when given) from "@2027-06-01" or "@tomorrow", for a pocket's date.
 export function parseEntry(input, fallbackTag = null) {
-    const {text, tag} = parseTag(input, fallbackTag);
+    const {text, tag, due} = parseTag(input, fallbackTag);
     const words = text.split(' ').filter(Boolean);
     const i = words.findIndex(w => parseAmount(w) !== null);
     const amount = i < 0 ? null : parseAmount(words[i]);
     const note = words.filter((_w, j) => j !== i).join(' ').replace(/^#\S+$/, '');
-    return {amount, note, tag: tag ?? null};
+    return {amount, note, tag: tag ?? null, ...due ? {due: iso(new Date(due))} : {}};
 }
 
 // Valid entries from whatever was on disk.
-export const clean = data => (Array.isArray(data) ? data.filter(e => e && ['in', 'out', 'move'].includes(e.kind) &&
+export const clean = data => (Array.isArray(data) ? data.filter(e => e && ['in', 'out', 'move', 'save', 'withdraw'].includes(e.kind) &&
     Number.isInteger(e.amount) && e.amount > 0 && e.wallet in WALLETS && /^\d{4}-\d\d-\d\d$/.test(e.date) &&
-    (e.kind !== 'move' || (e.to in WALLETS && e.to !== e.wallet))) : []);
+    (e.kind !== 'move' || (e.to in WALLETS && e.to !== e.wallet)) &&
+    (!['save', 'withdraw'].includes(e.kind) || typeof e.pocket === 'string')) : []);
+
+const amountOk = n => Number.isInteger(n) && n > 0;
+export const cleanPlan = d => ({
+    setAsides: (Array.isArray(d?.setAsides) ? d.setAsides : []).filter(a => typeof a?.tag === 'string' && amountOk(a.amount)),
+    pockets: (Array.isArray(d?.pockets) ? d.pockets : []).filter(p => typeof p?.id === 'string' &&
+        typeof p.name === 'string' && amountOk(p.target)),
+});
+
+// Money in pocket `id` (every pocket's, without one).
+export const pocketBalance = (entries, id = null) => entries.reduce((n, e) => n +
+    ((id === null ? e.pocket !== undefined : e.pocket === id) ? {save: e.amount, withdraw: -e.amount}[e.kind] ?? 0 : 0), 0);
+
+// A pocket's progress, and what it still needs each month (this one included) to make its date.
+export function pocketPlan(entries, pocket, date) {
+    const saved = pocketBalance(entries, pocket.id), need = Math.max(0, pocket.target - saved);
+    const [y, m] = ym(date), [dy, dm] = pocket.due ? ym(pocket.due) : [0, 0];
+    const months = (dy - y) * 12 + dm - m + 1;
+    return {saved, need, used: Math.min(1, saved / pocket.target),
+        perMonth: pocket.due && need > 0 ? need / Math.max(1, months) : null};
+}
+
+// Each set-aside this month: what's been spent in its category, what's left of it, how far over.
+export function reserves(entries, month, setAsides) {
+    return setAsides.map(({tag, amount}) => {
+        const spent = entries.reduce((n, e) => n +
+            (e.kind === 'out' && monthOf(e) === month && (e.category || 'other') === tag ? e.amount : 0), 0);
+        return {tag, amount, spent, left: Math.max(0, amount - spent), over: Math.max(0, spent - amount)};
+    });
+}
 
 // Money held in each wallet, from every entry (dated up to `upTo`, if given).
 export function balances(entries, upTo = null) {
@@ -86,7 +122,7 @@ export function balances(entries, upTo = null) {
     for (const e of entries) {
         if (upTo && e.date > upTo)
             continue;
-        b[e.wallet] += e.kind === 'in' ? e.amount : -e.amount;
+        b[e.wallet] += e.kind === 'in' || e.kind === 'withdraw' ? e.amount : -e.amount;
         if (e.kind === 'move')
             b[e.to] += e.amount;
     }
@@ -94,14 +130,16 @@ export function balances(entries, upTo = null) {
 }
 
 export function summary(entries, month) {
-    let carry = 0, income = 0, spent = 0, fixed = 0;
+    let carry = 0, income = 0, spent = 0, fixed = 0, saved = 0;
     const cats = new Map();
     for (const e of entries) {
         if (e.kind === 'move')
             continue;
-        const m = monthOf(e), sign = e.kind === 'in' ? 1 : -1;
+        const m = monthOf(e), sign = e.kind === 'in' || e.kind === 'withdraw' ? 1 : -1;
         if (m < month) {
             carry += sign * e.amount;
+        } else if (m === month && (e.kind === 'save' || e.kind === 'withdraw')) {
+            saved -= sign * e.amount; // net put into pockets
         } else if (m === month && e.kind === 'in') {
             income += e.amount;
         } else if (m === month) {
@@ -112,9 +150,9 @@ export function summary(entries, month) {
             cats.set(c, (cats.get(c) ?? 0) + e.amount);
         }
     }
-    const budget = carry + income;
+    const budget = carry + income - saved;
     return {
-        month, carry, income, budget, spent, fixed,
+        month, carry, income, saved, budget, spent, fixed,
         left: budget - spent,
         used: budget > 0 ? spent / budget : null, // null: nothing to spend from
         categories: [...cats].sort((a, b) => b[1] - a[1]).map(([tag, amount]) => ({tag, amount})),
@@ -122,16 +160,42 @@ export function summary(entries, month) {
 }
 
 // The month so far, plus what today can take so the rest of the month gets the same each day.
-// `paceUsed`: share of the day-to-day money (all but fixed costs) spent, to compare with `pace`.
-export function today(entries, date) {
+// Set-asides are planned costs: what's left of them is held back (`reserved`, leaving `free`), and
+// spending inside one isn't day-to-day; only what goes past it is. `daily`: day-to-day spending
+// (all but fixed costs and set-asides); `paceUsed`: its share of the day-to-day money (`pool`).
+export function today(entries, date, setAsides = []) {
     const s = summary(entries, date.slice(0, 7));
     const day = Number(date.slice(8)), days = daysIn(s.month);
-    const spentToday = entries.reduce((n, e) => n +
-        (e.kind === 'out' && e.date === date && !FIXED.includes(e.category) ? e.amount : 0), 0);
-    const perDay = (s.left + spentToday) / (days - day + 1);
-    const pool = s.budget - s.fixed;
-    return {...s, day, days, pace: day / days, spentToday, perDay, todayLeft: perDay - spentToday,
-        paceUsed: pool > 0 ? (s.spent - s.fixed) / pool : null};
+    const r = reserves(entries, s.month, setAsides), planned = new Map(r.map(x => [x.tag, x]));
+    const catSpent = new Map(s.categories.map(c => [c.tag, c.amount]));
+    let spentToday = 0;
+    const todayIn = new Map();
+    for (const e of entries) {
+        const c = e.category || 'other';
+        if (e.kind !== 'out' || e.date !== date || FIXED.includes(c))
+            continue;
+        if (planned.has(c))
+            todayIn.set(c, (todayIn.get(c) ?? 0) + e.amount);
+        else
+            spentToday += e.amount;
+    }
+    let plannedCost = 0, plannedSpent = 0;
+    for (const tag of new Set([...FIXED, ...planned.keys()])) {
+        const spent = catSpent.get(tag) ?? 0, cap = planned.get(tag)?.amount ?? 0;
+        if (FIXED.includes(tag)) {
+            plannedCost += Math.max(spent, cap);
+            plannedSpent += spent;
+        } else {
+            plannedCost += cap;
+            plannedSpent += Math.min(spent, cap);
+            spentToday += Math.min(todayIn.get(tag) ?? 0, planned.get(tag).over); // past the set-aside today
+        }
+    }
+    const reserved = r.reduce((n, x) => n + x.left, 0), free = s.left - reserved;
+    const perDay = (free + spentToday) / (days - day + 1);
+    const pool = s.budget - plannedCost, daily = s.spent - plannedSpent;
+    return {...s, day, days, pace: day / days, reserves: r, reserved, free, spentToday, perDay,
+        todayLeft: perDay - spentToday, daily, pool, paceUsed: pool > 0 ? daily / pool : null};
 }
 
 // One wallet this month: what's in it now, what's been spent from it, and the share spent of the
@@ -147,19 +211,24 @@ export function walletMonth(entries, wallet, date) {
 }
 
 // Up to two short pieces of advice for the month so far, most urgent first.
-export function tips(entries, date) {
-    const t = today(entries, date);
+export function tips(entries, date, setAsides = []) {
+    const t = today(entries, date, setAsides);
     if (t.budget <= 0 && !t.spent)
         return ['Add this month’s money with + Money to see your budget.'];
-    const out = [], pace = t.pace, daily = t.spent - t.fixed;
+    const out = [], pace = t.pace, daily = t.daily;
     if (t.left < 0)
         out.push(`Over by ${idr(-t.left)}; it comes out of next month.`);
+    else if (t.free < 0)
+        out.push(`Set-asides need ${idr(-t.free)} more than is left this month.`);
     else if (t.paceUsed !== null && t.paceUsed > pace + 0.1)
         out.push(`${pct(t.paceUsed)} of day-to-day money spent, ${pct(pace)} of the month gone. Keep to ${idr(t.perDay)} a day.`);
+    const over = t.reserves.filter(x => x.over > 0).sort((a, b) => b.over - a.over)[0];
+    if (over)
+        out.push(`${label(over.tag)} is ${idr(over.over)} past its ${idr(over.amount)} set-aside.`);
     const untracked = t.categories.find(c => c.tag === 'untracked');
     if (untracked && untracked.amount >= 0.15 * t.spent)
         out.push(`${idr(untracked.amount)} is untracked. Logging as you spend sharpens these tips.`);
-    const dayToDay = t.categories.filter(c => !FIXED.includes(c.tag)), top = dayToDay[0];
+    const dayToDay = t.categories.filter(c => !FIXED.includes(c.tag) && !t.reserves.some(x => x.tag === c.tag)), top = dayToDay[0];
     if (top && dayToDay.length > 1 && top.amount >= 0.4 * daily) {
         const prev = summary(entries, addMonths(t.month, -1));
         const before = prev.categories.find(c => c.tag === top.tag);
@@ -167,7 +236,7 @@ export function tips(entries, date) {
             `${before ? ` (${pct(before.amount / (prev.spent - prev.fixed))} last month)` : ''}.`);
     }
     if (!out.length && t.left >= 0 && daily > 0) {
-        const end = t.budget - t.fixed - daily / pace; // left at month end if day-to-day spending keeps this pace
+        const end = t.pool - daily / pace; // left at month end if day-to-day spending keeps this pace
         out.push(end > 0 ? `On track: about ${idr(end)} left at the end of the month.`
             : `At this pace the money runs out before the month ends. Aim for ${idr(t.perDay)} a day.`);
     }
@@ -187,7 +256,7 @@ const serial = date => {
     const [y, m, d] = date.split('-').map(Number);
     return Date.UTC(y, m - 1, d) / 864e5 + 25569; // days since 1899-12-30
 };
-const KIND = {in: 'Income', out: 'Spent', move: 'Move'};
+const KIND = {in: 'Income', out: 'Spent', move: 'Move', save: 'To pocket', withdraw: 'From pocket'};
 
 export function reportMonths(entries) {
     return [...new Set(entries.map(monthOf))].sort().reverse();
@@ -251,12 +320,12 @@ export function reportSheet(entries, month, now) {
     for (const [i, e] of list.entries()) {
         r++;
         const fill = i % 2 ? BAND : undefined;
-        const color = {in: '1A7F37', out: 'B42318', move: MUTED}[e.kind];
+        const color = {in: '1A7F37', out: 'B42318', move: MUTED, save: MUTED, withdraw: MUTED}[e.kind];
         put(`A${r}`, serial(e.date), {fmt: 'd mmm yyyy', fill, indent: 1, align: 'left'});
         put(`B${r}`, KIND[e.kind], {fill, color});
         put(`C${r}`, e.kind === 'out' ? label(e.category || 'other') : '', {fill});
         put(`D${r}`, e.kind === 'move' ? `${WALLETS[e.wallet]} → ${WALLETS[e.to]}` : WALLETS[e.wallet], {fill});
-        put(`E${r}`, e.kind === 'out' ? -e.amount : e.amount, {fmt: MONEY, fill, color, bold: true});
+        put(`E${r}`, e.kind === 'out' || e.kind === 'save' ? -e.amount : e.amount, {fmt: MONEY, fill, color, bold: true});
         put(`F${r}`, e.note ?? '', {fill, color: MUTED, indent: 2});
     }
     if (!list.length)
