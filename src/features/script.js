@@ -4,6 +4,7 @@
 // ponytail: pasted text lives in memory only; persist it if people want it back after log-out.
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 const MAX_BYTES = 1 << 20; // a teleprompter script, not a log file
@@ -18,6 +19,7 @@ export class Script {
 
         this._label = new St.Label({style_class: 'revelio-script-text', x_expand: true});
         this._label.clutter_text.line_wrap = true;
+        this._label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE; // St.Label ellipsizes by default: one screenful, nothing to scroll
         const content = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
         content.add_child(this._label);
         this._scroll = new St.ScrollView({
