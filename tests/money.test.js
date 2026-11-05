@@ -102,6 +102,9 @@ const sa = [
 ];
 const s1 = M.today(sa, '2026-11-02', plan);
 eq([s1.reserved, s1.free, s1.daily, s1.pool, s1.spentToday], [150000, 2780000, 20000, 2800000, 20000]);
+eq([s1.available, s1.free], [2800000, 2780000]); // 3jt shows as 2.8jt once 200k is set aside
+eq(M.today([{kind: 'in', amount: 50000, wallet: 'cash', date: '2026-11-01'}], '2026-11-02',
+    [{tag: 'transport', amount: 25000}]).free, 25000); // 50k with 25k set aside for transport shows 25k
 eq(s1.perDay, 2800000 / 29); // the reserve is held back; transport today isn't day-to-day
 eq(M.today(sa, '2026-11-02').perDay, (2930000 + 70000) / 29); // without the plan, as before
 // Past the set-aside: the 50k over is day-to-day (and today's spending).

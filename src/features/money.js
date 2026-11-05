@@ -435,11 +435,12 @@ export class Money {
         this._eye.accessible_name = hide ? 'Show amounts' : 'Hide amounts';
         const monthName = M.monthName(t.month).split(' ')[0];
         const total = this._rings.total;
-        total.used = t.used ?? (t.spent ? 1 : 0);
+        // Set-asides are taken off the top: the ring and amounts are about the money that's left.
+        total.used = t.freeUsed ?? (t.spent ? 1 : 0);
         total.pace = t.pace;
-        total.state = t.left < 0 || (t.spent > 0 && (t.used ?? 1) >= 1) ? 'over'
+        total.state = t.free < 0 || (t.spent > 0 && (t.freeUsed ?? 1) >= 1) ? 'over'
             : (t.paceUsed ?? 0) > t.pace + 0.1 ? 'ahead' : 'ok';
-        total.value.text = t.used === null ? '—' : pct(t.used);
+        total.value.text = t.freeUsed === null ? '—' : pct(t.freeUsed);
         const wallets = {};
         for (const key of Object.keys(M.WALLETS)) {
             const w = wallets[key] = M.walletMonth(this._entries, key, date), r = this._rings[key];
@@ -459,11 +460,11 @@ export class Money {
         if (this._selected === 'total') {
             this._caption.text = 'LEFT FOR TODAY';
             this._setBig(t.todayLeft, idr);
-            this._line1.text = `${idr(t.left)} of ${idr(t.budget)} left in ${monthName}`;
+            this._line1.text = `${idr(t.free)} of ${idr(t.available)} left in ${monthName}`;
             const pockets = M.pocketBalance(this._entries);
             const plan = [...t.reserved ? [`${idr(t.reserved)} set aside`] : [], ...pockets ? [`${idr(pockets)} in pockets`] : []];
             this._line2.text = `Spent ${idr(t.spent)} · ${plan.length ? plan.join(' · ')
-                : t.used === null ? 'no money added yet' : `${pct(t.used)} of the month’s money`}`;
+                : t.freeUsed === null ? 'no money added yet' : `${pct(t.freeUsed)} of the month’s money`}`;
             this._tip.text = hide ? '' : M.tips(this._entries, date, this._plan.setAsides).join('\n');
         } else {
             const w = wallets[this._selected];

@@ -191,10 +191,13 @@ export function today(entries, date, setAsides = []) {
             spentToday += Math.min(todayIn.get(tag) ?? 0, planned.get(tag).over); // past the set-aside today
         }
     }
+    // `available`: the month's money minus every set-aside; `free` is what's left of it.
     const reserved = r.reduce((n, x) => n + x.left, 0), free = s.left - reserved;
+    const available = s.budget - r.reduce((n, x) => n + x.amount, 0);
     const perDay = (free + spentToday) / (days - day + 1);
     const pool = s.budget - plannedCost, daily = s.spent - plannedSpent;
-    return {...s, day, days, pace: day / days, reserves: r, reserved, free, spentToday, perDay,
+    return {...s, day, days, pace: day / days, reserves: r, reserved, free, available,
+        freeUsed: available > 0 ? 1 - free / available : null, spentToday, perDay,
         todayLeft: perDay - spentToday, daily, pool, paceUsed: pool > 0 ? daily / pool : null};
 }
 
